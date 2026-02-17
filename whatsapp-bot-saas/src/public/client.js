@@ -7,7 +7,8 @@
 
     // --- Auth Guard ---
     var token = localStorage.getItem('botsaas_token');
-    var isPreview = window.location.port !== '3000';
+    // Preview mode: only when opened as a static file (no protocol http/https)
+    var isPreview = window.location.protocol === 'file:';
 
     if (!token && !isPreview) {
         window.location.href = './auth.html';
