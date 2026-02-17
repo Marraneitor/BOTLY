@@ -932,34 +932,46 @@ function startBot(uid, email) {
     const room = `user_${uid}`;
     console.log(`\n[Bot] Starting for ${email} (${uid})`);
 
+    const isDocker = !!process.env.PUPPETEER_EXECUTABLE_PATH;
+
     const puppeteerOpts = {
-            headless: true,
+            headless: 'new',
             args: [
                 '--no-sandbox',
                 '--disable-setuid-sandbox',
                 '--disable-dev-shm-usage',
                 '--disable-accelerated-2d-canvas',
                 '--no-first-run',
-                '--disable-gpu'
+                '--disable-gpu',
+                '--single-process',
+                '--no-zygote',
+                '--disable-features=HttpsUpgrades',
+                '--disable-extensions'
             ]
         };
     // Use system Chromium in production (Docker)
-    if (process.env.PUPPETEER_EXECUTABLE_PATH) {
+    if (isDocker) {
         puppeteerOpts.executablePath = process.env.PUPPETEER_EXECUTABLE_PATH;
+        console.log(`[Bot] Using system Chromium: ${puppeteerOpts.executablePath}`);
     }
 
-    const client = new Client({
+    const clientOpts = {
         authStrategy: new LocalAuth({
             clientId: uid,
             dataPath: path.join(__dirname, '.wwebjs_auth')
         }),
-        puppeteer: puppeteerOpts,
-        // Fix: use remote web version cache to stay compatible with WhatsApp Web updates
-        webVersionCache: {
+        puppeteer: puppeteerOpts
+    };
+
+    // In Docker/production, use remote web version cache for compatibility
+    if (isDocker) {
+        clientOpts.webVersionCache = {
             type: 'remote',
-            remotePath: 'https://raw.githubusercontent.com/niccolovnc/whatsapp-web.js/refs/heads/main/src/util/Constants.js'
-        }
-    });
+            remotePath: 'https://raw.githubusercontent.com/niccolovnc/whatsapp-web.js/main/src/util/Constants.js'
+        };
+    }
+
+    const client = new Client(clientOpts);
 
     botState.client = client;
 
@@ -994,6 +1006,16 @@ function startBot(uid, email) {
         botState.status = 'off';
         console.error(`[Bot] Auth failure for ${email}:`, msg);
         io.to(room).emit('auth_error', msg);
+    });
+
+    // Loading screen (progress indicator)
+    client.on('loading_screen', (percent, message) => {
+        console.log(`[Bot] Loading for ${email}: ${percent}% — ${message}`);
+    });
+
+    // General error handler
+    client.on('change_state', (state) => {
+        console.log(`[Bot] State changed for ${email}: ${state}`);
     });
 
     // Disconnected

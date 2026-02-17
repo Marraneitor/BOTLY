@@ -20,12 +20,17 @@ RUN apt-get update && apt-get install -y \
     libxdamage1 \
     libxrandr2 \
     xdg-utils \
+    ca-certificates \
+    wget \
     --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
 
 # Tell Puppeteer to use the installed Chromium
 ENV PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=true
 ENV PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium
+
+# Increase shared memory for Chromium (default 64MB is too small)
+ENV DBUS_SESSION_BUS_ADDRESS=autolaunch:
 
 WORKDIR /app
 
@@ -36,6 +41,9 @@ RUN npm install --production
 
 # Copy app code
 COPY whatsapp-bot-saas/ ./
+
+# Create writable directories for whatsapp sessions
+RUN mkdir -p /app/.wwebjs_auth /app/.wwebjs_cache && chmod -R 777 /app/.wwebjs_auth /app/.wwebjs_cache
 
 EXPOSE 3000
 
