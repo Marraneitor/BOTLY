@@ -779,7 +779,14 @@
         if (sub && sub.active) {
             subStatus.style.display = 'flex';
             subStatus.className = 'sub-status sub-status--active';
-            if (sub.isTrial) {
+            if (sub.isAdmin) {
+                if (subStatusPlan) subStatusPlan.textContent = 'Plan Administrador';
+                if (subStatusExpires) subStatusExpires.textContent = 'Acceso permanente';
+                if (subStatusBadge) {
+                    subStatusBadge.textContent = 'Admin';
+                    subStatusBadge.className = 'sub-status__badge sub-status__badge--active';
+                }
+            } else if (sub.isTrial) {
                 if (subStatusPlan) subStatusPlan.textContent = 'Prueba gratuita';
                 if (subStatusExpires) {
                     var h = sub.trialHoursLeft != null ? Math.ceil(sub.trialHoursLeft) : '?';
