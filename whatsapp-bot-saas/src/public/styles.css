@@ -1670,3 +1670,80 @@ body::after {
     outline: 2px solid var(--accent);
     outline-offset: 2px;
 }
+
+/* ============================================================
+   TRIAL MODAL OVERLAY
+   ============================================================ */
+.trial-modal-overlay {
+    position: fixed;
+    top: 0; left: 0; right: 0; bottom: 0;
+    background: rgba(0,0,0,.7);
+    z-index: 9999;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    backdrop-filter: blur(4px);
+}
+.trial-modal {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 1rem;
+    padding: 2.5rem 2rem;
+    max-width: 440px;
+    width: 90%;
+    text-align: center;
+    box-shadow: 0 20px 60px rgba(0,0,0,.4);
+}
+.trial-modal__icon {
+    margin-bottom: 1rem;
+    color: #f59e0b;
+}
+.trial-modal__title {
+    font-size: 1.35rem;
+    font-weight: 700;
+    color: var(--text-primary);
+    margin-bottom: .75rem;
+}
+.trial-modal__text {
+    font-size: .95rem;
+    color: var(--text-secondary);
+    margin-bottom: 1.5rem;
+    line-height: 1.5;
+}
+
+/* ============================================================
+   TRIAL BANNER (floating)
+   ============================================================ */
+.trial-banner {
+    position: fixed;
+    bottom: 1.5rem;
+    left: 50%;
+    transform: translateX(-50%);
+    background: linear-gradient(135deg, #f59e0b, #d97706);
+    color: #fff;
+    padding: .65rem 1.5rem;
+    border-radius: 999px;
+    font-size: .85rem;
+    font-weight: 500;
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    z-index: 1000;
+    box-shadow: 0 4px 20px rgba(245,158,11,.4);
+    animation: bannerSlideUp .4s ease;
+}
+.trial-banner .btn {
+    background: rgba(255,255,255,.2);
+    border: 1px solid rgba(255,255,255,.4);
+    color: #fff;
+    font-size: .78rem;
+    padding: .3rem .8rem;
+}
+.trial-banner .btn:hover {
+    background: rgba(255,255,255,.35);
+}
+@keyframes bannerSlideUp {
+    from { transform: translateX(-50%) translateY(100%); opacity: 0; }
+    to   { transform: translateX(-50%) translateY(0);    opacity: 1; }
+}
+}

@@ -410,5 +410,29 @@
             </div>
         </section>
     </main>
+
+    <!-- ========== TRIAL / SUBSCRIPTION EXPIRED MODAL ========== -->
+    <div class="trial-modal-overlay" id="trial-modal" style="display:none;">
+        <div class="trial-modal">
+            <div class="trial-modal__icon">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="48" height="48">
+                    <circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>
+                </svg>
+            </div>
+            <h2 class="trial-modal__title" id="trial-modal-title">Tu prueba gratuita ha expirado</h2>
+            <p class="trial-modal__text" id="trial-modal-text">
+                Suscríbete a un plan para seguir usando Botly y mantener tu bot activo.
+            </p>
+            <button class="btn btn--primary btn--lg" id="trial-modal-btn" onclick="document.getElementById('trial-modal').style.display='none'; document.querySelector('[data-section=plans]').click();">
+                Ver planes y suscribirse
+            </button>
+        </div>
+    </div>
+
+    <!-- ========== TRIAL BANNER (floating) ========== -->
+    <div class="trial-banner" id="trial-banner" style="display:none;">
+        <span id="trial-banner-text">🎁 Prueba gratuita: te quedan <strong id="trial-hours-left">24</strong> horas</span>
+        <button class="btn btn--sm btn--primary" onclick="document.querySelector('[data-section=plans]').click();">Ver planes</button>
+    </div>
 </body>
 </html>

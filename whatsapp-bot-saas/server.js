@@ -262,14 +262,42 @@ async function saveUserConfig(uid, data) {
 // ══════════════════════════════════════════════════════════
 
 // Save user profile after registration (optional extra data)
+// Also grants a 1-day free trial for NEW users.
 app.post('/api/auth/profile', authMiddleware, async (req, res) => {
     const { name, businessName } = req.body;
-    const config = await saveUserConfig(req.uid, {
+
+    // Check if user already exists (returning user vs brand-new)
+    const existing = await loadUserConfig(req.uid);
+    const isNewUser = !existing.createdAt;
+
+    const profileData = {
         name: name || req.name,
         businessName: businessName || '',
         email: req.email,
-        createdAt: new Date().toISOString()
-    });
+        createdAt: existing.createdAt || new Date().toISOString()
+    };
+
+    // Grant 1-day trial ONLY to brand-new users who have no subscription
+    if (isNewUser && !existing.subscription) {
+        const now = new Date();
+        const trialExpiry = new Date(now);
+        trialExpiry.setDate(trialExpiry.getDate() + 1); // +1 day
+
+        profileData.subscription = {
+            active: true,
+            planId: 'trial',
+            planName: 'Prueba gratuita (1 día)',
+            paidAt: now.toISOString(),
+            expiresAt: trialExpiry.toISOString(),
+            stripeSessionId: null,
+            stripeCustomerId: null,
+            totalMonths: 0,
+            isTrial: true
+        };
+        console.log(`[Auth] 🎁 1-day trial granted to ${req.email} (expires ${trialExpiry.toISOString()})`);
+    }
+
+    const config = await saveUserConfig(req.uid, profileData);
     console.log(`[Auth] Profile saved: ${req.email} (${req.uid})`);
     res.json({ ok: true, data: config });
 });
@@ -303,8 +331,26 @@ app.get('/api/bot/status', authMiddleware, (req, res) => {
     });
 });
 
-app.post('/api/bot/start', authMiddleware, (req, res) => {
+app.post('/api/bot/start', authMiddleware, async (req, res) => {
     const uid = req.uid;
+
+    // Admin bypass
+    const isAdmin = FREE_PASS_EMAILS.includes(req.email);
+
+    // Check subscription/trial before starting bot
+    if (!isAdmin) {
+        const config = await loadUserConfig(uid);
+        const sub = config.subscription;
+        if (!sub || !sub.expiresAt || new Date(sub.expiresAt) <= new Date()) {
+            const reason = sub?.isTrial ? 'trial_expired' : (!sub ? 'no_subscription' : 'expired');
+            return res.status(403).json({
+                error: reason === 'trial_expired'
+                    ? 'Tu prueba gratuita ha expirado. Suscríbete para seguir usando Botly.'
+                    : 'Se requiere una suscripción activa para iniciar el bot.',
+                reason
+            });
+        }
+    }
 
     const existing = userBots.get(uid);
     if (existing && (existing.status === 'connected' || existing.status === 'qr' || existing.status === 'starting')) {
@@ -428,15 +474,40 @@ app.get('/api/plans', (_req, res) => {
 
 // Get user subscription status
 app.get('/api/subscription', authMiddleware, async (req, res) => {
+    // Admin always has access
+    if (FREE_PASS_EMAILS.includes(req.email)) {
+        res.set('Cache-Control', 'no-store');
+        return res.json({ ok: true, data: { active: true, planId: 'admin', planName: 'Administrador', expiresAt: null, isAdmin: true } });
+    }
+
     const config = await loadUserConfig(req.uid);
     const sub = config.subscription || null;
     let active = false;
+    let reason = null;
     if (sub && sub.expiresAt) {
         active = new Date(sub.expiresAt) > new Date();
+        if (!active) {
+            reason = sub.isTrial ? 'trial_expired' : 'expired';
+        }
+    } else {
+        reason = 'no_subscription';
     }
+
+    // Calculate remaining hours for trial
+    let trialHoursLeft = null;
+    if (sub && sub.isTrial && active) {
+        const msLeft = new Date(sub.expiresAt) - new Date();
+        trialHoursLeft = Math.max(0, Math.round(msLeft / (1000 * 60 * 60) * 10) / 10);
+    }
+
     // no-store: browser must NEVER cache this — data is per-user
     res.set('Cache-Control', 'no-store');
-    res.json({ ok: true, data: sub ? { ...sub, active } : { active: false } });
+    res.json({
+        ok: true,
+        data: sub
+            ? { ...sub, active, reason, trialHoursLeft }
+            : { active: false, reason: 'no_subscription' }
+    });
 });
 
 // Emails that can "pay" without real Stripe checkout (demo/owner accounts)
@@ -882,7 +953,12 @@ function startBot(uid, email) {
             clientId: uid,
             dataPath: path.join(__dirname, '.wwebjs_auth')
         }),
-        puppeteer: puppeteerOpts
+        puppeteer: puppeteerOpts,
+        // Fix: use remote web version cache to stay compatible with WhatsApp Web updates
+        webVersionCache: {
+            type: 'remote',
+            remotePath: 'https://raw.githubusercontent.com/niccolovnc/whatsapp-web.js/refs/heads/main/src/util/Constants.js'
+        }
     });
 
     botState.client = client;
@@ -939,6 +1015,20 @@ function startBot(uid, email) {
             if (msg.fromMe) return;
             if (msg.type !== 'chat') return;
             if (/^https?:\/\/\S+$/i.test(msg.body.trim())) return;
+
+            // Check subscription is still active (skip for admin)
+            const isAdmin = FREE_PASS_EMAILS.includes(email);
+            if (!isAdmin) {
+                const userConf = await loadUserConfig(uid);
+                const sub = userConf.subscription;
+                if (!sub || !sub.expiresAt || new Date(sub.expiresAt) <= new Date()) {
+                    console.log(`[Bot][${email}] ⛔ Subscription expired — ignoring message`);
+                    io.to(room).emit('subscription_expired', {
+                        reason: sub?.isTrial ? 'trial_expired' : 'expired'
+                    });
+                    return;
+                }
+            }
 
             const contact = await msg.getContact();
             const senderName = contact.pushname || contact.name || msg.from;

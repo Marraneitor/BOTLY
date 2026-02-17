@@ -332,6 +332,16 @@
                 showToast('¡Suscripción activada! Plan activo hasta ' + new Date(data.expiresAt).toLocaleDateString('es'), 'success');
             }
         });
+
+        // Subscription expired while bot is running
+        socket.on('subscription_expired', function(data) {
+            invalidateSubCache();
+            loadSubscription(true);
+            var msg = data.reason === 'trial_expired'
+                ? 'Tu prueba gratuita ha expirado. El bot dejará de responder.'
+                : 'Tu suscripción ha expirado. El bot dejará de responder.';
+            showToast(msg, 'error');
+        });
     }
 
     // --- QR Rendering ---
@@ -730,17 +740,64 @@
 
     function updateSubUI(sub) {
         if (!subStatus) return;
+
+        // ── Trial banner ──
+        var banner = document.getElementById('trial-banner');
+        var hoursEl = document.getElementById('trial-hours-left');
+        if (banner) {
+            if (sub && sub.isTrial && sub.active && sub.trialHoursLeft != null) {
+                banner.style.display = 'flex';
+                if (hoursEl) hoursEl.textContent = sub.trialHoursLeft < 1
+                    ? 'menos de 1'
+                    : Math.ceil(sub.trialHoursLeft);
+            } else {
+                banner.style.display = 'none';
+            }
+        }
+
+        // ── Blocking modal for expired trial / no subscription ──
+        var modal = document.getElementById('trial-modal');
+        var modalTitle = document.getElementById('trial-modal-title');
+        var modalText  = document.getElementById('trial-modal-text');
+        if (modal && sub) {
+            if (sub.isAdmin) {
+                modal.style.display = 'none';
+            } else if (!sub.active && sub.reason === 'trial_expired') {
+                modal.style.display = 'flex';
+                if (modalTitle) modalTitle.textContent = 'Tu prueba gratuita ha expirado';
+                if (modalText)  modalText.textContent  = 'Suscr\u00edbete a un plan para seguir usando Botly y mantener tu bot activo.';
+            } else if (!sub.active && (sub.reason === 'expired' || sub.reason === 'no_subscription')) {
+                modal.style.display = 'flex';
+                if (modalTitle) modalTitle.textContent = 'Suscripci\u00f3n requerida';
+                if (modalText)  modalText.textContent  = 'Tu suscripci\u00f3n ha expirado. Renueva tu plan para seguir usando Botly.';
+            } else {
+                modal.style.display = 'none';
+            }
+        }
+
         if (sub && sub.active) {
             subStatus.style.display = 'flex';
             subStatus.className = 'sub-status sub-status--active';
-            if (subStatusPlan) subStatusPlan.textContent = 'Plan ' + (sub.planName || sub.planId || 'Activo');
-            if (subStatusExpires) {
-                var exp = new Date(sub.expiresAt);
-                subStatusExpires.textContent = 'Expira: ' + exp.toLocaleDateString('es', { day: '2-digit', month: 'long', year: 'numeric' });
-            }
-            if (subStatusBadge) {
-                subStatusBadge.textContent = 'Activo';
-                subStatusBadge.className = 'sub-status__badge sub-status__badge--active';
+            if (sub.isTrial) {
+                if (subStatusPlan) subStatusPlan.textContent = 'Prueba gratuita';
+                if (subStatusExpires) {
+                    var h = sub.trialHoursLeft != null ? Math.ceil(sub.trialHoursLeft) : '?';
+                    subStatusExpires.textContent = 'Expira en ' + h + ' hora' + (h !== 1 ? 's' : '');
+                }
+                if (subStatusBadge) {
+                    subStatusBadge.textContent = 'Trial';
+                    subStatusBadge.className = 'sub-status__badge sub-status__badge--trial';
+                }
+            } else {
+                if (subStatusPlan) subStatusPlan.textContent = 'Plan ' + (sub.planName || sub.planId || 'Activo');
+                if (subStatusExpires) {
+                    var exp = new Date(sub.expiresAt);
+                    subStatusExpires.textContent = 'Expira: ' + exp.toLocaleDateString('es', { day: '2-digit', month: 'long', year: 'numeric' });
+                }
+                if (subStatusBadge) {
+                    subStatusBadge.textContent = 'Activo';
+                    subStatusBadge.className = 'sub-status__badge sub-status__badge--active';
+                }
             }
         } else {
             subStatus.style.display = 'flex';
