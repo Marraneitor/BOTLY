@@ -24,8 +24,15 @@ let serviceAccount;
 if (process.env.FIREBASE_SERVICE_ACCOUNT) {
     serviceAccount = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT);
 } else {
-    // Local dev: load from file
-    serviceAccount = require('./firebase-service-account.json');
+    // Local dev: load from file if it exists
+    const saPath = path.join(__dirname, 'firebase-service-account.json');
+    if (fs.existsSync(saPath)) {
+        serviceAccount = JSON.parse(fs.readFileSync(saPath, 'utf8'));
+    } else {
+        console.error('❌ FIREBASE_SERVICE_ACCOUNT env var is not set and firebase-service-account.json not found!');
+        console.error('   Set the FIREBASE_SERVICE_ACCOUNT variable in Railway with the JSON content.');
+        process.exit(1);
+    }
 }
 admin.initializeApp({
     credential: admin.credential.cert(serviceAccount),
