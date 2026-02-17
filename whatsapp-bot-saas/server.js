@@ -85,6 +85,9 @@ const PLANS = {
 // ─── Config ──────────────────────────────────────────────
 const PORT = process.env.PORT || 3000;
 
+// Emails that bypass subscription checks (admin/owner accounts)
+const FREE_PASS_EMAILS = ['yoelskygold@gmail.com'];
+
 // ─── Express + Socket.io ─────────────────────────────────
 const app    = express();
 const server = http.createServer(app);
@@ -509,9 +512,6 @@ app.get('/api/subscription', authMiddleware, async (req, res) => {
             : { active: false, reason: 'no_subscription' }
     });
 });
-
-// Emails that can "pay" without real Stripe checkout (demo/owner accounts)
-const FREE_PASS_EMAILS = ['yoelskygold@gmail.com'];
 
 // Create Stripe Checkout session
 app.post('/api/stripe/checkout', authMiddleware, async (req, res) => {
