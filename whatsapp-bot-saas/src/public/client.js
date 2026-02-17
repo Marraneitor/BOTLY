@@ -1,0 +1,930 @@
+/* ============================================================
+   WhatsApp Bot SaaS — Dashboard Client
+   Firebase Auth guard + per-user bot management
+   ============================================================ */
+(function () {
+    'use strict';
+
+    // --- Auth Guard ---
+    var token = localStorage.getItem('botsaas_token');
+    var isPreview = window.location.port !== '3000';
+
+    if (!token && !isPreview) {
+        window.location.href = './auth.html';
+        return;
+    }
+
+    // --- Constants ---
+    var API = '/api';
+    var TOAST_MS = 3500;
+
+    // --- Helpers ---
+    var $ = function(s) { return document.querySelector(s); };
+    var $$ = function(s) { return document.querySelectorAll(s); };
+
+    function debounce(fn, ms) {
+        var t;
+        return function() {
+            var args = arguments;
+            clearTimeout(t);
+            t = setTimeout(function() { fn.apply(null, args); }, ms);
+        };
+    }
+
+    // --- User info ---
+    var user = JSON.parse(localStorage.getItem('botsaas_user') || '{}');
+
+    // Inject user bar into sidebar
+    function renderUserBar() {
+        var brand = $('.sidebar__brand');
+        if (!brand || !user.email) return;
+        var initials = (user.name || user.email || '?')
+            .split(' ').map(function(w) { return w[0]; }).join('').toUpperCase().slice(0, 2);
+        var bar = document.createElement('div');
+        bar.className = 'sidebar__user';
+        bar.innerHTML =
+            '<div class="sidebar__user-avatar">' +
+                (user.photo
+                    ? '<img src="' + user.photo + '" alt="" referrerpolicy="no-referrer">'
+                    : initials) +
+            '</div>' +
+            '<div class="sidebar__user-info">' +
+                '<span class="sidebar__user-name">' + (user.name || user.email) + '</span>' +
+                '<span class="sidebar__user-email">' + user.email + '</span>' +
+            '</div>';
+        brand.after(bar);
+    }
+    renderUserBar();
+
+    // --- Show admin link for admin emails ---
+    (function () {
+        var ADMIN_EMAILS = ['yoelskygold@gmail.com'];
+        var adminLink = document.getElementById('admin-link');
+        if (adminLink && user.email && ADMIN_EMAILS.indexOf(user.email) !== -1) {
+            adminLink.style.display = '';
+        }
+    })();
+
+    // --- Password toggle for API key field ---
+    $$('[data-toggle-password]').forEach(function(btn) {
+        btn.addEventListener('click', function() {
+            var input = $('#' + btn.dataset.togglePassword);
+            if (input) input.type = input.type === 'password' ? 'text' : 'password';
+        });
+    });
+
+    var brandSpan = $('.sidebar__brand span');
+    if (user.businessName && brandSpan) {
+        brandSpan.textContent = user.businessName;
+    }
+
+    // --- DOM refs ---
+    var sidebar      = $('#sidebar');
+    var hamburger    = $('#hamburger');
+    var sidebarLinks = $$('.sidebar__link');
+    var sections     = $$('.section');
+    var configForm   = $('#config-form');
+    var toastEl      = $('#toast');
+    var qrPlaceholder = $('#qr-placeholder');
+    var qrCanvas     = $('#qr-canvas');
+    var connDot      = $('#conn-dot');
+    var connLabel    = $('#conn-label');
+    var statusIcon   = $('#status-icon');
+    var statusText   = $('#status-text');
+    var btnStartBot  = $('#btn-start-bot');
+    var btnStopBot   = $('#btn-stop-bot');
+    var btnResetDraft = $('#btn-reset-draft');
+
+    // --- State ---
+    var socket = null;
+    var botConnected = false;
+
+    // --- Navigation ---
+    function navigateTo(name) {
+        sections.forEach(function(s) { s.classList.add('section--hidden'); });
+        var target = $('#section-' + name);
+        if (target) target.classList.remove('section--hidden');
+        sidebarLinks.forEach(function(l) { l.classList.remove('sidebar__link--active'); });
+        var link = $('[data-section="' + name + '"]');
+        if (link) link.classList.add('sidebar__link--active');
+        sidebar.classList.remove('sidebar--open');
+    }
+
+    sidebarLinks.forEach(function(l) {
+        l.addEventListener('click', function(e) { e.preventDefault(); navigateTo(l.dataset.section); });
+    });
+    $$('[data-goto]').forEach(function(b) {
+        b.addEventListener('click', function() { navigateTo(b.dataset.goto); });
+    });
+    if (hamburger) {
+        hamburger.addEventListener('click', function() { sidebar.classList.toggle('sidebar--open'); });
+    }
+
+    // --- Toast ---
+    function showToast(msg, type) {
+        type = type || 'success';
+        toastEl.textContent = msg;
+        toastEl.className = 'toast toast--' + type + ' toast--visible';
+        setTimeout(function() { toastEl.classList.remove('toast--visible'); }, TOAST_MS);
+    }
+
+    // --- Auth headers ---
+    function authHeaders() {
+        return {
+            'Content-Type': 'application/json',
+            'Authorization': 'Bearer ' + (localStorage.getItem('botsaas_token') || '')
+        };
+    }
+
+    // --- API helper ---
+    function apiCall(path, options) {
+        options = options || {};
+        if (isPreview) return Promise.reject(new Error('PREVIEW'));
+
+        return fetch(API + path, Object.assign({ headers: authHeaders() }, options))
+            .then(function(res) {
+                if (res.status === 401) {
+                    localStorage.removeItem('botsaas_token');
+                    localStorage.removeItem('botsaas_user');
+                    window.location.href = './auth.html';
+                    return Promise.reject(new Error('AUTH_EXPIRED'));
+                }
+                var ct = res.headers.get('content-type') || '';
+                if (ct.indexOf('application/json') === -1) return Promise.reject(new Error('NOT_JSON'));
+                return res.json().then(function(json) {
+                    if (!res.ok) return Promise.reject(new Error(json.error || 'Error ' + res.status));
+                    return json;
+                });
+            });
+    }
+
+    // --- LocalStorage Draft ---
+    var DRAFT_KEY = 'botsaas_draft_' + (user.uid || 'default');
+
+    function saveDraft() {
+        var data = serializeForm();
+        localStorage.setItem(DRAFT_KEY, JSON.stringify(data));
+    }
+
+    function loadDraft() {
+        try { return JSON.parse(localStorage.getItem(DRAFT_KEY)); } catch(e) { return null; }
+    }
+
+    function clearDraft() { localStorage.removeItem(DRAFT_KEY); }
+
+    if (configForm) {
+        configForm.addEventListener('input', debounce(saveDraft, 400));
+    }
+
+    if (btnResetDraft) {
+        btnResetDraft.addEventListener('click', function() {
+            clearDraft();
+            configForm.reset();
+            showToast('Borrador descartado', 'success');
+        });
+    }
+
+    // --- Form Serialization / Hydration ---
+    function serializeForm() {
+        if (!configForm) return {};
+        var fd = new FormData(configForm);
+        var data = {};
+
+        ['businessName', 'businessDescription', 'menu', 'botPrompt'].forEach(function(k) {
+            data[k] = fd.get(k) || '';
+        });
+
+        var days = ['lunes', 'martes', 'miercoles', 'jueves', 'viernes', 'sabado', 'domingo'];
+        data.schedule = {};
+        days.forEach(function(d) {
+            var cb = configForm.querySelector('[name="schedule_' + d + '_active"]');
+            data.schedule[d] = {
+                open:   fd.get('schedule_' + d + '_open') || '00:00',
+                close:  fd.get('schedule_' + d + '_close') || '00:00',
+                active: cb ? cb.checked : false
+            };
+        });
+
+        return data;
+    }
+
+    function hydrateForm(data) {
+        if (!data || !configForm) return;
+
+        ['businessName', 'businessDescription', 'menu', 'botPrompt'].forEach(function(k) {
+            var el = configForm.querySelector('[name="' + k + '"]');
+            if (el && data[k] !== undefined) el.value = data[k];
+        });
+
+        if (data.schedule) {
+            Object.keys(data.schedule).forEach(function(day) {
+                var val = data.schedule[day];
+                var o = configForm.querySelector('[name="schedule_' + day + '_open"]');
+                var c = configForm.querySelector('[name="schedule_' + day + '_close"]');
+                var a = configForm.querySelector('[name="schedule_' + day + '_active"]');
+                if (o) o.value = val.open;
+                if (c) c.value = val.close;
+                if (a) a.checked = val.active;
+            });
+        }
+    }
+
+    // --- Form Submit ---
+    if (configForm) {
+        configForm.addEventListener('submit', function(e) {
+            e.preventDefault();
+            var btn = $('#btn-save');
+            var data = serializeForm();
+
+            btn.disabled = true;
+            btn.innerHTML = '<span class="spinner"></span> Guardando...';
+
+            apiCall('/config', {
+                method: 'POST',
+                body: JSON.stringify(data)
+            }).then(function() {
+                clearDraft();
+                showToast('Configuracion guardada correctamente');
+            }).catch(function(err) {
+                saveDraft();
+                if (err.message === 'PREVIEW') {
+                    showToast('Guardado localmente', 'success');
+                } else {
+                    showToast(err.message || 'Error al guardar', 'error');
+                }
+            }).finally(function() {
+                btn.disabled = false;
+                btn.innerHTML =
+                    '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">' +
+                    '<path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/>' +
+                    '<polyline points="17 21 17 13 7 13 7 21"/>' +
+                    '<polyline points="7 3 7 8 15 8"/>' +
+                    '</svg> Guardar configuracion';
+            });
+        });
+    }
+
+    // --- Socket.io ---
+    function initSocket() {
+        if (socket || isPreview) return;
+        if (typeof io === 'undefined') return;
+
+        socket = io({
+            auth: { token: localStorage.getItem('botsaas_token') },
+            reconnectionAttempts: 10,
+            reconnectionDelay: 1000,
+            timeout: 8000
+        });
+
+        socket.on('connect', function() { console.log('[Socket] Conectado'); });
+
+        socket.on('qr', function(qrString) {
+            console.log('[Socket] QR recibido');
+            renderQR(qrString);
+        });
+
+        socket.on('ready', function() {
+            setConnectionStatus(true);
+            showToast('Bot conectado exitosamente!');
+        });
+
+        socket.on('disconnected', function(reason) {
+            setConnectionStatus(false);
+            showToast('Bot desconectado: ' + (reason || 'desconocido'), 'error');
+        });
+
+        socket.on('stats', function(data) {
+            if (data.messagesToday != null) {
+                var el = $('#messages-today');
+                if (el) el.textContent = data.messagesToday;
+            }
+            if (data.contactsCount != null) {
+                var el2 = $('#contacts-count');
+                if (el2) el2.textContent = data.contactsCount;
+            }
+        });
+
+        // Real-time messages
+        socket.on('new_message', function(msg) {
+            allMessages.push(msg);
+            // Update conversations list
+            updateConversationInList(msg);
+            // If chat view is open for this contact, append the message
+            if (currentChatPhone && msg.from === currentChatPhone) {
+                appendChatBubble(msg);
+                scrollChatToBottom();
+            }
+            // Update counter
+            var counterEl = $('#messages-today');
+            if (counterEl && msg.direction === 'incoming') {
+                counterEl.textContent = parseInt(counterEl.textContent || '0') + 1;
+            }
+        });
+
+        socket.on('auth_error', function(msg) { showToast(msg || 'Error de autenticacion', 'error'); });
+        socket.on('connect_error', function() { console.warn('[Socket] Error de conexion'); });
+
+        // Subscription updated via webhook
+        socket.on('subscription_updated', function(data) {
+            invalidateSubCache();
+            loadSubscription(true);
+            if (data.active) {
+                showToast('¡Suscripción activada! Plan activo hasta ' + new Date(data.expiresAt).toLocaleDateString('es'), 'success');
+            }
+        });
+    }
+
+    // --- QR Rendering ---
+    function renderQR(qrString) {
+        if (!qrCanvas) return;
+        qrPlaceholder.style.display = 'none';
+        qrCanvas.classList.remove('qr-canvas--hidden');
+        qrCanvas.innerHTML = '';
+        if (window.QRCode) {
+            new QRCode(qrCanvas, {
+                text: qrString,
+                width: 256,
+                height: 256,
+                colorDark: '#0f172a',
+                colorLight: '#ffffff',
+                correctLevel: QRCode.CorrectLevel.M
+            });
+        }
+    }
+
+    function setConnectionStatus(connected) {
+        botConnected = connected;
+        if (connDot) connDot.className = connected ? 'status-dot status-dot--on' : 'status-dot status-dot--off';
+        if (connLabel) connLabel.textContent = connected ? 'Conectado' : 'Desconectado';
+        if (statusIcon) statusIcon.className = connected ? 'card__icon card__icon--connected' : 'card__icon card__icon--disconnected';
+        if (statusText) statusText.textContent = connected ? 'Conectado' : 'Desconectado';
+        if (btnStartBot) btnStartBot.disabled = connected;
+        if (btnStopBot) btnStopBot.disabled = !connected;
+        if (connected && qrCanvas) {
+            qrCanvas.classList.add('qr-canvas--hidden');
+            qrPlaceholder.style.display = 'flex';
+            qrPlaceholder.querySelector('p').textContent = 'Bot vinculado correctamente!';
+        }
+    }
+
+    // --- Start / Stop Bot ---
+    if (btnStartBot) {
+        btnStartBot.addEventListener('click', function() {
+            if (isPreview) {
+                showToast('Inicia el servidor con: npm run dev', 'error');
+                return;
+            }
+            btnStartBot.disabled = true;
+            btnStartBot.textContent = 'Iniciando...';
+            initSocket();
+            apiCall('/bot/start', { method: 'POST' }).then(function() {
+                showToast('Bot iniciado - esperando QR...');
+            }).catch(function(err) {
+                showToast(err.message || 'Error al iniciar', 'error');
+                btnStartBot.disabled = false;
+            }).finally(function() {
+                btnStartBot.innerHTML =
+                    '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">' +
+                    '<polygon points="5 3 19 12 5 21 5 3"/>' +
+                    '</svg> Iniciar Bot';
+            });
+        });
+    }
+
+    if (btnStopBot) {
+        btnStopBot.addEventListener('click', function() {
+            btnStopBot.disabled = true;
+            apiCall('/bot/stop', { method: 'POST' }).then(function() {
+                setConnectionStatus(false);
+                showToast('Bot detenido');
+            }).catch(function(err) {
+                showToast(err.message || 'Error al detener', 'error');
+            }).finally(function() {
+                btnStopBot.disabled = !botConnected;
+            });
+        });
+    }
+
+    // --- Reset Bot (format devices, new QR) ---
+    var btnResetBot = $('#btn-reset-bot');
+    if (btnResetBot) {
+        btnResetBot.addEventListener('click', function() {
+            if (!confirm('¿Estás seguro?\nEsto desvinculará todos los dispositivos de esta sesión y generará un nuevo código QR.')) return;
+            if (isPreview) {
+                showToast('Inicia el servidor para formatear dispositivos', 'error');
+                return;
+            }
+            btnResetBot.disabled = true;
+            btnResetBot.innerHTML = '<span class="spinner"></span> Formateando...';
+            initSocket();
+            apiCall('/bot/reset', { method: 'POST' }).then(function() {
+                setConnectionStatus(false);
+                // Reset QR area to "waiting" state
+                if (qrPlaceholder) {
+                    qrPlaceholder.style.display = 'flex';
+                    qrPlaceholder.querySelector('p').textContent = 'Generando nuevo código QR…';
+                }
+                if (qrCanvas) qrCanvas.classList.add('qr-canvas--hidden');
+                showToast('Sesión reseteada. Esperando nuevo QR…');
+            }).catch(function(err) {
+                showToast(err.message || 'Error al formatear', 'error');
+            }).finally(function() {
+                btnResetBot.disabled = false;
+                btnResetBot.innerHTML =
+                    '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">' +
+                    '<path d="M23 4v6h-6"/><path d="M1 20v-6h6"/>' +
+                    '<path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/>' +
+                    '</svg> Formatear dispositivos (nuevo QR)';
+            });
+        });
+    }
+
+    // --- Messages / Inbox Section ---
+    var inboxView      = $('#inbox-view');
+    var chatView       = $('#chat-view');
+    var inboxEmpty     = $('#inbox-empty');
+    var inboxList      = $('#inbox-list');
+    var inboxSearch    = $('#inbox-search');
+    var btnClearMsgs   = $('#btn-clear-messages');
+    var btnBackInbox   = $('#btn-back-inbox');
+    var chatMessages   = $('#chat-messages');
+    var chatInput      = $('#chat-input');
+    var btnSendMessage = $('#btn-send-message');
+    var chatContactName  = $('#chat-contact-name');
+    var chatContactPhone = $('#chat-contact-phone');
+    var allMessages = [];
+    var conversations = {}; // phone -> { phone, senderName, messages[], lastMessage, lastTimestamp }
+    var currentChatPhone = null;
+
+    function formatTime(iso) {
+        var d = new Date(iso);
+        var now = new Date();
+        var isToday = d.toDateString() === now.toDateString();
+        var time = d.toLocaleTimeString('es', { hour: '2-digit', minute: '2-digit' });
+        if (isToday) return time;
+        var yesterday = new Date(now); yesterday.setDate(now.getDate() - 1);
+        if (d.toDateString() === yesterday.toDateString()) return 'Ayer ' + time;
+        return d.toLocaleDateString('es', { day: '2-digit', month: 'short' }) + ' ' + time;
+    }
+
+    function escapeHtml(str) {
+        var div = document.createElement('div');
+        div.textContent = str;
+        return div.innerHTML;
+    }
+
+    function getInitials(name) {
+        return (name || '?').split(' ').map(function(w) { return w[0]; }).join('').toUpperCase().slice(0, 2);
+    }
+
+    // --- Build conversations from flat message array ---
+    function buildConversations(msgs) {
+        conversations = {};
+        msgs.forEach(function(m) {
+            var key = m.from;
+            if (!conversations[key]) {
+                conversations[key] = { phone: key, senderName: m.senderName || key, messages: [], lastMessage: null, lastTimestamp: null };
+            }
+            conversations[key].messages.push(m);
+            conversations[key].lastMessage = m.body;
+            conversations[key].lastTimestamp = m.timestamp;
+            if (m.senderName && m.senderName !== 'Tú (manual)' && m.senderName !== 'Bot') {
+                conversations[key].senderName = m.senderName;
+            }
+        });
+    }
+
+    function getSortedConversations() {
+        return Object.values(conversations).sort(function(a, b) {
+            return new Date(b.lastTimestamp) - new Date(a.lastTimestamp);
+        });
+    }
+
+    // --- Render conversations list (inbox) ---
+    function renderInbox(filter) {
+        if (!inboxList) return;
+        inboxList.innerHTML = '';
+        var convos = getSortedConversations();
+        if (filter) {
+            var q = filter.toLowerCase();
+            convos = convos.filter(function(c) {
+                return c.senderName.toLowerCase().indexOf(q) !== -1 || c.phone.indexOf(q) !== -1;
+            });
+        }
+        if (convos.length === 0) {
+            if (inboxEmpty) inboxEmpty.style.display = 'flex';
+            inboxList.style.display = 'none';
+            return;
+        }
+        if (inboxEmpty) inboxEmpty.style.display = 'none';
+        inboxList.style.display = 'flex';
+
+        convos.forEach(function(c) {
+            var lastDir = c.messages.length > 0 ? c.messages[c.messages.length - 1].direction : '';
+            var preview = (lastDir === 'outgoing' ? 'Bot: ' : '') + (c.lastMessage || '').substring(0, 60);
+            var incoming = c.messages.filter(function(m) { return m.direction === 'incoming'; }).length;
+
+            var div = document.createElement('div');
+            div.className = 'inbox-item';
+            div.dataset.phone = c.phone;
+            div.innerHTML =
+                '<div class="inbox-item__avatar">' + getInitials(c.senderName) + '</div>' +
+                '<div class="inbox-item__body">' +
+                    '<div class="inbox-item__top">' +
+                        '<span class="inbox-item__name">' + escapeHtml(c.senderName) + '</span>' +
+                        '<span class="inbox-item__time">' + formatTime(c.lastTimestamp) + '</span>' +
+                    '</div>' +
+                    '<div class="inbox-item__bottom">' +
+                        '<span class="inbox-item__preview">' + escapeHtml(preview) + '</span>' +
+                        '<span class="inbox-item__count">' + c.messages.length + ' msgs</span>' +
+                    '</div>' +
+                '</div>';
+            div.addEventListener('click', function() { openChat(c.phone); });
+            inboxList.appendChild(div);
+        });
+    }
+
+    // --- Update a single conversation in the list when a new message arrives ---
+    function updateConversationInList(msg) {
+        var key = msg.from;
+        if (!conversations[key]) {
+            conversations[key] = { phone: key, senderName: msg.senderName || key, messages: [], lastMessage: null, lastTimestamp: null };
+        }
+        conversations[key].messages.push(msg);
+        conversations[key].lastMessage = msg.body;
+        conversations[key].lastTimestamp = msg.timestamp;
+        if (msg.senderName && msg.senderName !== 'Tú (manual)' && msg.senderName !== 'Bot') {
+            conversations[key].senderName = msg.senderName;
+        }
+        // Re-render inbox if visible
+        if (inboxView && !inboxView.classList.contains('chat-view--hidden')) {
+            renderInbox(inboxSearch ? inboxSearch.value.trim() : '');
+        }
+    }
+
+    // --- Open a chat ---
+    function openChat(phone) {
+        currentChatPhone = phone;
+        var convo = conversations[phone];
+        if (!convo) return;
+
+        // Fill header
+        if (chatContactName) chatContactName.textContent = convo.senderName;
+        if (chatContactPhone) chatContactPhone.textContent = '+' + phone;
+
+        // Switch views
+        if (inboxView) inboxView.style.display = 'none';
+        if (chatView) chatView.classList.remove('chat-view--hidden');
+
+        // Render messages
+        renderChatMessages(convo.messages);
+        scrollChatToBottom();
+
+        // Focus input
+        if (chatInput) chatInput.focus();
+    }
+
+    function closeChat() {
+        currentChatPhone = null;
+        if (chatView) chatView.classList.add('chat-view--hidden');
+        if (inboxView) inboxView.style.display = '';
+        renderInbox(inboxSearch ? inboxSearch.value.trim() : '');
+    }
+
+    // --- Render chat bubbles ---
+    function renderChatMessages(msgs) {
+        if (!chatMessages) return;
+        chatMessages.innerHTML = '';
+        msgs.forEach(function(m) {
+            appendChatBubble(m);
+        });
+    }
+
+    function appendChatBubble(msg) {
+        if (!chatMessages) return;
+        var div = document.createElement('div');
+        div.className = 'chat-bubble chat-bubble--' + msg.direction;
+        div.innerHTML =
+            '<p class="chat-bubble__text">' + escapeHtml(msg.body) + '</p>' +
+            '<span class="chat-bubble__time">' + formatTime(msg.timestamp) +
+                (msg.direction === 'outgoing' ? ' • Bot' : '') +
+            '</span>';
+        chatMessages.appendChild(div);
+    }
+
+    function scrollChatToBottom() {
+        if (chatMessages) {
+            setTimeout(function() { chatMessages.scrollTop = chatMessages.scrollHeight; }, 50);
+        }
+    }
+
+    // --- Send manual message ---
+    function sendManualMessage() {
+        if (!currentChatPhone || !chatInput) return;
+        var text = chatInput.value.trim();
+        if (!text) return;
+        chatInput.value = '';
+        chatInput.style.height = 'auto';
+
+        apiCall('/messages/send', {
+            method: 'POST',
+            body: JSON.stringify({ phone: currentChatPhone, message: text })
+        }).then(function() {
+            // Message will arrive via socket 'new_message'
+        }).catch(function(err) {
+            showToast(err.message || 'Error al enviar', 'error');
+        });
+    }
+
+    if (btnSendMessage) {
+        btnSendMessage.addEventListener('click', sendManualMessage);
+    }
+    if (chatInput) {
+        chatInput.addEventListener('keydown', function(e) {
+            if (e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault();
+                sendManualMessage();
+            }
+        });
+        // Auto-resize textarea
+        chatInput.addEventListener('input', function() {
+            chatInput.style.height = 'auto';
+            chatInput.style.height = Math.min(chatInput.scrollHeight, 120) + 'px';
+        });
+    }
+    if (btnBackInbox) {
+        btnBackInbox.addEventListener('click', closeChat);
+    }
+
+    // --- Load messages and build conversations ---
+    function loadMessagesFromAPI() {
+        apiCall('/messages').then(function(res) {
+            if (res.data) {
+                allMessages = res.data;
+                buildConversations(allMessages);
+                renderInbox();
+            }
+        }).catch(function() { /* ignore */ });
+    }
+
+    if (inboxSearch) {
+        inboxSearch.addEventListener('input', debounce(function() {
+            renderInbox(inboxSearch.value.trim());
+        }, 250));
+    }
+
+    if (btnClearMsgs) {
+        btnClearMsgs.addEventListener('click', function() {
+            if (!confirm('¿Borrar todo el historial de mensajes?')) return;
+            apiCall('/messages', { method: 'DELETE' }).then(function() {
+                allMessages = [];
+                conversations = {};
+                renderInbox();
+                closeChat();
+                showToast('Historial borrado');
+            }).catch(function(err) {
+                showToast(err.message || 'Error al borrar', 'error');
+            });
+        });
+    }
+
+    // --- Subscription / Plans ---
+    var subStatus      = $('#sub-status');
+    var subStatusPlan  = $('#sub-status-plan');
+    var subStatusExpires = $('#sub-status-expires');
+    var subStatusBadge = $('#sub-status-badge');
+
+    // ── Deduplication + in-memory cache ──
+    var _subInflight = null;   // pending promise (dedup)
+    var _subCache    = null;   // last result
+    var _subCacheTs  = 0;      // timestamp of cache
+    var SUB_CACHE_TTL = 15000; // 15 s
+
+    function loadSubscription(forceRefresh) {
+        var now = Date.now();
+
+        // 1) Return cached data if still fresh
+        if (!forceRefresh && _subCache && (now - _subCacheTs < SUB_CACHE_TTL)) {
+            if (_subCache.data) updateSubUI(_subCache.data);
+            return Promise.resolve(_subCache);
+        }
+
+        // 2) If a request is already in-flight, piggyback on it
+        if (_subInflight) return _subInflight;
+
+        // 3) Fire ONE real request
+        _subInflight = apiCall('/subscription').then(function(res) {
+            _subCache   = res;
+            _subCacheTs = Date.now();
+            _subInflight = null;
+            if (res.data) updateSubUI(res.data);
+            return res;
+        }).catch(function(err) {
+            _subInflight = null;
+            throw err;
+        });
+        return _subInflight;
+    }
+
+    function invalidateSubCache() { _subCache = null; _subCacheTs = 0; }
+
+    function updateSubUI(sub) {
+        if (!subStatus) return;
+        if (sub && sub.active) {
+            subStatus.style.display = 'flex';
+            subStatus.className = 'sub-status sub-status--active';
+            if (subStatusPlan) subStatusPlan.textContent = 'Plan ' + (sub.planName || sub.planId || 'Activo');
+            if (subStatusExpires) {
+                var exp = new Date(sub.expiresAt);
+                subStatusExpires.textContent = 'Expira: ' + exp.toLocaleDateString('es', { day: '2-digit', month: 'long', year: 'numeric' });
+            }
+            if (subStatusBadge) {
+                subStatusBadge.textContent = 'Activo';
+                subStatusBadge.className = 'sub-status__badge sub-status__badge--active';
+            }
+        } else {
+            subStatus.style.display = 'flex';
+            subStatus.className = 'sub-status sub-status--inactive';
+            if (subStatusPlan) subStatusPlan.textContent = 'Sin suscripci\u00f3n activa';
+            if (subStatusExpires) subStatusExpires.textContent = 'Elige un plan para comenzar';
+            if (subStatusBadge) {
+                subStatusBadge.textContent = 'Inactivo';
+                subStatusBadge.className = 'sub-status__badge sub-status__badge--inactive';
+            }
+        }
+    }
+
+    // Subscribe buttons
+    $$('.btn-subscribe').forEach(function(btn) {
+        btn.addEventListener('click', function() {
+            var planId = btn.dataset.plan;
+            if (!planId) return;
+            if (isPreview) {
+                showToast('Inicia el servidor para suscribirte', 'error');
+                return;
+            }
+            btn.disabled = true;
+            var origText = btn.textContent;
+            btn.innerHTML = '<span class="spinner"></span> Redirigiendo...';
+
+            apiCall('/stripe/checkout', {
+                method: 'POST',
+                body: JSON.stringify({ planId: planId })
+            }).then(function(res) {
+                if (res.freePass) {
+                    // Owner/demo account — subscription activated instantly
+                    showToast('✅ Plan ' + res.plan + ' activado (' + res.totalMonths + ' meses)', 'success');
+                    invalidateSubCache();
+                    loadSubscription(true);
+                    btn.disabled = false;
+                    btn.textContent = origText;
+                } else if (res.url) {
+                    window.location.href = res.url;
+                } else {
+                    showToast('Error: no se obtuvo URL de pago', 'error');
+                }
+            }).catch(function(err) {
+                showToast(err.message || 'Error al iniciar pago', 'error');
+            }).finally(function() {
+                btn.disabled = false;
+                btn.textContent = origText;
+            });
+        });
+    });
+
+    // Check URL for payment result
+    function checkPaymentResult() {
+        var params = new URLSearchParams(window.location.search);
+        var payment = params.get('payment');
+        var sessionId = params.get('session_id');
+        if (payment === 'success') {
+            navigateTo('plans');
+            // Clean URL immediately so refresh doesn't re-trigger
+            window.history.replaceState({}, '', '/');
+
+            if (sessionId) {
+                // Verify the session with backend (activates subscription if not already done by webhook)
+                showToast('Verificando pago...', 'success');
+                apiCall('/stripe/verify-session?session_id=' + encodeURIComponent(sessionId))
+                    .then(function(res) {
+                        if (res.ok) {
+                            showToast('\u00a1Pago exitoso! Tu suscripci\u00f3n est\u00e1 activa.', 'success');
+                        } else {
+                            showToast('Pago pendiente de confirmaci\u00f3n.', 'error');
+                        }
+                        invalidateSubCache();
+                        loadSubscription(true);
+                    }).catch(function(err) {
+                        showToast('Error verificando pago: ' + (err.message || ''), 'error');
+                        invalidateSubCache();
+                        loadSubscription(true);
+                    });
+            } else {
+                showToast('\u00a1Pago exitoso! Tu suscripci\u00f3n est\u00e1 activa.', 'success');
+                invalidateSubCache();
+                loadSubscription(true);
+            }
+        } else if (payment === 'cancelled') {
+            showToast('Pago cancelado.', 'error');
+            navigateTo('plans');
+            window.history.replaceState({}, '', '/');
+        }
+    }
+
+    // --- Logout ---
+    var btnLogout = $('#btn-logout');
+    if (btnLogout) {
+        btnLogout.addEventListener('click', function() {
+            localStorage.removeItem('botsaas_token');
+            localStorage.removeItem('botsaas_user');
+            if (socket) socket.disconnect();
+
+            // Sign out from Firebase — WAIT for it to finish before redirecting
+            try {
+                var fbConfig = {
+                    apiKey: 'AIzaSyCcBN4HTgTdYLJR4VfCnAs7hlWWD-VnHb8',
+                    authDomain: 'chatbot-1d169.firebaseapp.com',
+                    projectId: 'chatbot-1d169'
+                };
+                if (!firebase.apps.length) firebase.initializeApp(fbConfig);
+                firebase.auth().signOut().then(function() {
+                    window.location.href = './auth.html';
+                }).catch(function() {
+                    window.location.href = './auth.html';
+                });
+            } catch (e) {
+                console.warn('Firebase signOut error:', e);
+                window.location.href = './auth.html';
+            }
+        });
+    }
+
+    // --- Init ---
+    function init() {
+        var draft = loadDraft();
+        if (draft) {
+            hydrateForm(draft);
+            showToast('Borrador local restaurado', 'success');
+        }
+
+        if (isPreview) {
+            navigateTo('connection');
+            showDemoQR();
+            return;
+        }
+
+        apiCall('/config').then(function(res) {
+            if (res.data) hydrateForm(res.data);
+        }).catch(function() { /* use draft */ });
+
+        apiCall('/bot/status').then(function(res) {
+            if (res.status === 'connected') {
+                initSocket();
+                setConnectionStatus(true);
+            } else if (res.status === 'qr') {
+                initSocket();
+                navigateTo('connection');
+            }
+        }).catch(function() { /* ignore */ });
+
+        // Load messages history
+        loadMessagesFromAPI();
+
+        // Load subscription status
+        loadSubscription();
+
+        // Check payment result from URL
+        checkPaymentResult();
+    }
+
+    // --- Demo QR ---
+    function showDemoQR() {
+        if (!qrCanvas) return;
+        qrPlaceholder.style.display = 'none';
+        qrCanvas.classList.remove('qr-canvas--hidden');
+        qrCanvas.innerHTML = '';
+        var tryRender = function() {
+            if (window.QRCode) {
+                new QRCode(qrCanvas, {
+                    text: 'https://botsaas.demo/preview-qr',
+                    width: 256, height: 256,
+                    colorDark: '#0f172a', colorLight: '#ffffff',
+                    correctLevel: QRCode.CorrectLevel.M
+                });
+                var label = document.createElement('p');
+                label.textContent = 'QR de demo - Inicia el backend para el QR real';
+                label.style.cssText = 'margin-top:.75rem;font-size:.78rem;color:#94a3b8;text-align:center;';
+                qrCanvas.appendChild(label);
+            } else {
+                setTimeout(tryRender, 100);
+            }
+        };
+        tryRender();
+    }
+
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', init);
+    } else {
+        init();
+    }
+})();

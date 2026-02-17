@@ -1,0 +1,159 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Botly — Iniciar sesión</title>
+    <link rel="icon" type="image/png" href="./images/logo.png">
+    <link rel="stylesheet" href="./styles.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+</head>
+<body class="auth-body">
+    <div class="auth-container">
+        <!-- Branding -->
+        <div class="auth-brand">
+            <img class="auth-brand__logo" src="./images/logo.png" alt="Botly">
+            <h1 class="auth-brand__name">Botly</h1>
+            <p class="auth-brand__tagline">Tu asistente de WhatsApp inteligente</p>
+        </div>
+
+        <!-- ===== LOGIN CARD ===== -->
+        <div class="auth-card" id="login-card">
+            <h2 class="auth-card__title">Iniciar sesión</h2>
+            <p class="auth-card__subtitle">Accede a tu dashboard para gestionar tu bot</p>
+
+            <form class="auth-form" id="login-form" autocomplete="off">
+                <div class="auth-form__group">
+                    <label class="auth-form__label" for="login-email">Correo electrónico</label>
+                    <div class="auth-form__input-wrap">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg>
+                        <input class="auth-form__input" type="email" id="login-email" placeholder="tu@email.com" required>
+                    </div>
+                </div>
+
+                <div class="auth-form__group">
+                    <label class="auth-form__label" for="login-password">Contraseña</label>
+                    <div class="auth-form__input-wrap">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+                        <input class="auth-form__input" type="password" id="login-password" placeholder="••••••••" required minlength="6">
+                        <button type="button" class="auth-form__eye" data-target="login-password" aria-label="Mostrar contraseña">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+                        </button>
+                    </div>
+                </div>
+
+                <div class="auth-form__error" id="login-error"></div>
+
+                <button type="submit" class="btn btn--primary btn--block" id="btn-login">
+                    Iniciar sesión
+                </button>
+            </form>
+
+            <!-- Separator -->
+            <div class="auth-separator"><span>o continúa con</span></div>
+
+            <!-- Google Sign-In -->
+            <button type="button" class="btn btn--google" id="btn-google-login">
+                <svg viewBox="0 0 48 48" width="20" height="20"><path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/><path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/><path fill="#FBBC05" d="M10.53 28.59A14.5 14.5 0 0 1 9.5 24c0-1.59.28-3.14.76-4.59l-7.98-6.19A23.99 23.99 0 0 0 0 24c0 3.77.9 7.35 2.56 10.52l7.97-5.93z"/><path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 5.93C6.51 42.62 14.62 48 24 48z"/></svg>
+                Continuar con Google
+            </button>
+
+            <div class="auth-card__footer">
+                <p>¿No tienes cuenta? <a href="#" id="show-register" class="auth-link">Regístrate gratis</a></p>
+            </div>
+        </div>
+
+        <!-- ===== REGISTER CARD ===== -->
+        <div class="auth-card auth-card--hidden" id="register-card">
+            <h2 class="auth-card__title">Crear cuenta</h2>
+            <p class="auth-card__subtitle">Configura tu bot de WhatsApp en minutos</p>
+
+            <form class="auth-form" id="register-form" autocomplete="off">
+                <div class="auth-form__group">
+                    <label class="auth-form__label" for="reg-name">Nombre completo</label>
+                    <div class="auth-form__input-wrap">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+                        <input class="auth-form__input" type="text" id="reg-name" placeholder="Juan Pérez" required>
+                    </div>
+                </div>
+
+                <div class="auth-form__group">
+                    <label class="auth-form__label" for="reg-business">Nombre del negocio</label>
+                    <div class="auth-form__input-wrap">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
+                        <input class="auth-form__input" type="text" id="reg-business" placeholder="Mi Negocio" required>
+                    </div>
+                </div>
+
+                <div class="auth-form__group">
+                    <label class="auth-form__label" for="reg-email">Correo electrónico</label>
+                    <div class="auth-form__input-wrap">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg>
+                        <input class="auth-form__input" type="email" id="reg-email" placeholder="tu@email.com" required>
+                    </div>
+                </div>
+
+                <div class="auth-form__group">
+                    <label class="auth-form__label" for="reg-password">Contraseña</label>
+                    <div class="auth-form__input-wrap">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+                        <input class="auth-form__input" type="password" id="reg-password" placeholder="Mínimo 6 caracteres" required minlength="6">
+                        <button type="button" class="auth-form__eye" data-target="reg-password" aria-label="Mostrar contraseña">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+                        </button>
+                    </div>
+                </div>
+
+                <div class="auth-form__group">
+                    <label class="auth-form__label" for="reg-password2">Confirmar contraseña</label>
+                    <div class="auth-form__input-wrap">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+                        <input class="auth-form__input" type="password" id="reg-password2" placeholder="Repite tu contraseña" required minlength="6">
+                    </div>
+                </div>
+
+                <div class="auth-form__error" id="register-error"></div>
+
+                <button type="submit" class="btn btn--primary btn--block" id="btn-register">
+                    Crear mi cuenta
+                </button>
+            </form>
+
+            <!-- Separator -->
+            <div class="auth-separator"><span>o continúa con</span></div>
+
+            <!-- Google Sign-In -->
+            <button type="button" class="btn btn--google" id="btn-google-register">
+                <svg viewBox="0 0 48 48" width="20" height="20"><path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/><path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/><path fill="#FBBC05" d="M10.53 28.59A14.5 14.5 0 0 1 9.5 24c0-1.59.28-3.14.76-4.59l-7.98-6.19A23.99 23.99 0 0 0 0 24c0 3.77.9 7.35 2.56 10.52l7.97-5.93z"/><path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 5.93C6.51 42.62 14.62 48 24 48z"/></svg>
+                Continuar con Google
+            </button>
+
+            <div class="auth-card__footer">
+                <p>¿Ya tienes cuenta? <a href="#" id="show-login" class="auth-link">Inicia sesión</a></p>
+            </div>
+        </div>
+
+        <!-- Features -->
+        <div class="auth-features">
+            <div class="auth-feature">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
+                <span>Bot activo 24/7</span>
+            </div>
+            <div class="auth-feature">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09"/></svg>
+                <span>100% personalizable</span>
+            </div>
+            <div class="auth-feature">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+                <span>Datos seguros</span>
+            </div>
+        </div>
+    </div>
+
+    <!-- Firebase SDK (compat) -->
+    <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
+    <script src="./auth.js"></script>
+</body>
+</html>

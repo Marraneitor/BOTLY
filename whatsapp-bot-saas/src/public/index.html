@@ -1,0 +1,414 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Botly — Dashboard</title>
+    <link rel="icon" type="image/png" href="./images/logo.png">
+    <link rel="stylesheet" href="./styles.css">
+    <!-- Socket.io client (CDN — only used when backend is running) -->
+    <script src="https://cdn.socket.io/4.7.5/socket.io.min.js" defer crossorigin="anonymous"></script>
+    <!-- QRCode.js for rendering QR codes on a canvas -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js" defer crossorigin="anonymous"></script>
+    <!-- Firebase Auth SDK (needed for signOut on logout) -->
+    <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
+    <script src="./client.js" defer></script>
+    <!-- Google Fonts – Inter -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+</head>
+<body>
+    <!-- ========== SIDEBAR ========== -->
+    <aside class="sidebar" id="sidebar">
+        <div class="sidebar__brand">
+            <img class="sidebar__logo" src="./images/logo.png" alt="Botly">
+            <span>Botly</span>
+        </div>
+
+        <nav class="sidebar__nav">
+            <a href="#" class="sidebar__link sidebar__link--active" data-section="dashboard">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>
+                Dashboard
+            </a>
+            <a href="#" class="sidebar__link" data-section="config">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+                Configuración
+            </a>
+            <a href="#" class="sidebar__link" data-section="connection">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg>
+                Conexión
+            </a>
+            <a href="#" class="sidebar__link" data-section="messages">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+                Mensajes
+            </a>
+            <a href="#" class="sidebar__link" data-section="plans">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/></svg>
+                Planes
+            </a>
+            <a href="/admin" class="sidebar__link sidebar__link--admin" id="admin-link" style="display:none;">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>
+                Admin Panel
+            </a>
+        </nav>
+
+        <div class="sidebar__footer">
+            <button class="sidebar__logout" id="btn-logout">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
+                Cerrar sesión
+            </button>
+        </div>
+    </aside>
+
+    <!-- Mobile hamburger -->
+    <button class="hamburger" id="hamburger" aria-label="Abrir menú">
+        <span></span><span></span><span></span>
+    </button>
+
+    <!-- ========== MAIN CONTENT ========== -->
+    <main class="main">
+        <!-- ---- SECTION: Dashboard ---- -->
+        <section class="section" id="section-dashboard">
+            <h1 class="section__title">Dashboard</h1>
+            <div class="cards">
+                <div class="card card--status" id="card-status">
+                    <div class="card__icon card__icon--disconnected" id="status-icon">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/></svg>
+                    </div>
+                    <div class="card__body">
+                        <span class="card__label">Estado del Bot</span>
+                        <strong class="card__value" id="status-text">Desconectado</strong>
+                    </div>
+                </div>
+                <div class="card">
+                    <div class="card__icon">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+                    </div>
+                    <div class="card__body">
+                        <span class="card__label">Mensajes hoy</span>
+                        <strong class="card__value" id="messages-today">0</strong>
+                    </div>
+                </div>
+                <div class="card">
+                    <div class="card__icon">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/></svg>
+                    </div>
+                    <div class="card__body">
+                        <span class="card__label">Contactos atendidos</span>
+                        <strong class="card__value" id="contacts-count">0</strong>
+                    </div>
+                </div>
+            </div>
+
+            <div class="quick-actions">
+                <h2 class="quick-actions__title">Acciones rápidas</h2>
+                <button class="btn btn--primary" data-goto="config">Editar configuración</button>
+                <button class="btn btn--success" data-goto="connection">Ver conexión QR</button>
+            </div>
+        </section>
+
+        <!-- ---- SECTION: Configuración del Bot ---- -->
+        <section class="section section--hidden" id="section-config">
+            <h1 class="section__title">Configuración del Bot</h1>
+            <p class="section__subtitle">Personaliza cómo tu bot responde a tus clientes.</p>
+
+            <form class="form" id="config-form" autocomplete="off">
+                <!-- Nombre del negocio -->
+                <div class="form__group">
+                    <label class="form__label" for="businessName">Nombre del negocio</label>
+                    <input class="form__input" type="text" id="businessName" name="businessName" placeholder="Ej: Pizzería Don Mario" required>
+                </div>
+
+                <!-- Descripción del negocio -->
+                <div class="form__group">
+                    <label class="form__label" for="businessDescription">Descripción del negocio</label>
+                    <textarea class="form__textarea" id="businessDescription" name="businessDescription" rows="3" placeholder="Breve descripción de lo que ofreces..."></textarea>
+                </div>
+
+                <!-- Horarios de atención -->
+                <fieldset class="form__fieldset">
+                    <legend class="form__legend">Horarios de atención</legend>
+                    <div class="schedule-grid">
+                        <div class="schedule-row" data-day="lunes">
+                            <label class="schedule-row__day">Lunes</label>
+                            <input class="form__input form__input--sm" type="time" name="schedule_lunes_open" value="09:00">
+                            <span class="schedule-row__sep">a</span>
+                            <input class="form__input form__input--sm" type="time" name="schedule_lunes_close" value="18:00">
+                            <label class="toggle"><input type="checkbox" name="schedule_lunes_active" checked><span class="toggle__slider"></span></label>
+                        </div>
+                        <div class="schedule-row" data-day="martes">
+                            <label class="schedule-row__day">Martes</label>
+                            <input class="form__input form__input--sm" type="time" name="schedule_martes_open" value="09:00">
+                            <span class="schedule-row__sep">a</span>
+                            <input class="form__input form__input--sm" type="time" name="schedule_martes_close" value="18:00">
+                            <label class="toggle"><input type="checkbox" name="schedule_martes_active" checked><span class="toggle__slider"></span></label>
+                        </div>
+                        <div class="schedule-row" data-day="miercoles">
+                            <label class="schedule-row__day">Miércoles</label>
+                            <input class="form__input form__input--sm" type="time" name="schedule_miercoles_open" value="09:00">
+                            <span class="schedule-row__sep">a</span>
+                            <input class="form__input form__input--sm" type="time" name="schedule_miercoles_close" value="18:00">
+                            <label class="toggle"><input type="checkbox" name="schedule_miercoles_active" checked><span class="toggle__slider"></span></label>
+                        </div>
+                        <div class="schedule-row" data-day="jueves">
+                            <label class="schedule-row__day">Jueves</label>
+                            <input class="form__input form__input--sm" type="time" name="schedule_jueves_open" value="09:00">
+                            <span class="schedule-row__sep">a</span>
+                            <input class="form__input form__input--sm" type="time" name="schedule_jueves_close" value="18:00">
+                            <label class="toggle"><input type="checkbox" name="schedule_jueves_active" checked><span class="toggle__slider"></span></label>
+                        </div>
+                        <div class="schedule-row" data-day="viernes">
+                            <label class="schedule-row__day">Viernes</label>
+                            <input class="form__input form__input--sm" type="time" name="schedule_viernes_open" value="09:00">
+                            <span class="schedule-row__sep">a</span>
+                            <input class="form__input form__input--sm" type="time" name="schedule_viernes_close" value="18:00">
+                            <label class="toggle"><input type="checkbox" name="schedule_viernes_active" checked><span class="toggle__slider"></span></label>
+                        </div>
+                        <div class="schedule-row" data-day="sabado">
+                            <label class="schedule-row__day">Sábado</label>
+                            <input class="form__input form__input--sm" type="time" name="schedule_sabado_open" value="10:00">
+                            <span class="schedule-row__sep">a</span>
+                            <input class="form__input form__input--sm" type="time" name="schedule_sabado_close" value="14:00">
+                            <label class="toggle"><input type="checkbox" name="schedule_sabado_active" checked><span class="toggle__slider"></span></label>
+                        </div>
+                        <div class="schedule-row" data-day="domingo">
+                            <label class="schedule-row__day">Domingo</label>
+                            <input class="form__input form__input--sm" type="time" name="schedule_domingo_open" value="00:00">
+                            <span class="schedule-row__sep">a</span>
+                            <input class="form__input form__input--sm" type="time" name="schedule_domingo_close" value="00:00">
+                            <label class="toggle"><input type="checkbox" name="schedule_domingo_active"><span class="toggle__slider"></span></label>
+                        </div>
+                    </div>
+                </fieldset>
+
+                <!-- Menú de productos/servicios -->
+                <div class="form__group">
+                    <label class="form__label" for="menu">Menú de productos / servicios</label>
+                    <textarea class="form__textarea form__textarea--lg" id="menu" name="menu" rows="10" placeholder="Escribe tu menú aquí. Ejemplo:&#10;🍕 Pizza Margarita — $8.00&#10;🍕 Pizza Pepperoni — $9.50&#10;🥤 Refresco 500ml — $2.00"></textarea>
+                </div>
+
+                <!-- Prompt personalizado -->
+                <div class="form__group">
+                    <label class="form__label" for="botPrompt">Contexto / Personalidad del Bot (Prompt para Gemini)</label>
+                    <textarea class="form__textarea form__textarea--lg" id="botPrompt" name="botPrompt" rows="8" placeholder="Ej: Eres un asistente amable de la Pizzería Don Mario. Responde en español, sé breve y ofrece el menú cuando te lo pidan..."></textarea>
+                    <span class="form__hint">Este texto se envía a Gemini como instrucciones del sistema. Define el tono, idioma y comportamiento del bot.</span>
+                </div>
+
+                <!-- Actions -->
+                <div class="form__actions">
+                    <button type="submit" class="btn btn--primary btn--lg" id="btn-save">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>
+                        Guardar configuración
+                    </button>
+                    <button type="button" class="btn btn--ghost" id="btn-reset-draft">Descartar borrador</button>
+                </div>
+            </form>
+
+            <!-- Toast notification -->
+            <div class="toast" id="toast" role="alert"></div>
+        </section>
+
+        <!-- ---- SECTION: Conexión WhatsApp ---- -->
+        <section class="section section--hidden" id="section-connection">
+            <h1 class="section__title">Conexión WhatsApp</h1>
+            <p class="section__subtitle">Escanea el código QR con tu app de WhatsApp para vincular el bot.</p>
+
+            <div class="connection-panel">
+                <div class="qr-container" id="qr-container">
+                    <div class="qr-placeholder" id="qr-placeholder">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" class="qr-placeholder__icon">
+                            <rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><circle cx="17.5" cy="17.5" r="3.5"/>
+                        </svg>
+                        <p>Esperando código QR…</p>
+                        <span class="qr-placeholder__hint">Asegúrate de haber guardado tu configuración primero.</span>
+                    </div>
+                    <div id="qr-canvas" class="qr-canvas qr-canvas--hidden"></div>
+                </div>
+
+                <div class="connection-info">
+                    <div class="connection-status" id="connection-status">
+                        <span class="status-dot status-dot--off" id="conn-dot"></span>
+                        <span id="conn-label">Desconectado</span>
+                    </div>
+
+                    <div class="connection-steps">
+                        <h3>Instrucciones</h3>
+                        <ol>
+                            <li>Guarda tu configuración en la sección anterior.</li>
+                            <li>Haz clic en <strong>"Iniciar Bot"</strong> abajo.</li>
+                            <li>Abre WhatsApp en tu teléfono.</li>
+                            <li>Ve a <strong>Ajustes → Dispositivos vinculados → Vincular dispositivo</strong>.</li>
+                            <li>Escanea el código QR que aparecerá aquí.</li>
+                        </ol>
+                    </div>
+
+                    <div class="connection-actions">
+                        <button class="btn btn--success btn--lg" id="btn-start-bot">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+                            Iniciar Bot
+                        </button>
+                        <button class="btn btn--danger" id="btn-stop-bot" disabled>
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="6" y="6" width="12" height="12"/></svg>
+                            Detener Bot
+                        </button>
+                        <button class="btn btn--warning" id="btn-reset-bot">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M23 4v6h-6"/><path d="M1 20v-6h6"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
+                            Formatear dispositivos (nuevo QR)
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- ---- SECTION: Mensajes (Inbox) ---- -->
+        <section class="section section--hidden" id="section-messages">
+            <!-- INBOX VIEW: conversations list -->
+            <div id="inbox-view">
+                <div class="inbox-header">
+                    <h1 class="section__title">Conversaciones</h1>
+                    <div class="inbox-header__actions">
+                        <input class="form__input inbox-search" type="text" id="inbox-search" placeholder="Buscar contacto...">
+                        <button class="btn btn--danger btn--sm" id="btn-clear-messages">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
+                            Borrar todo
+                        </button>
+                    </div>
+                </div>
+
+                <div class="inbox-empty" id="inbox-empty">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+                    <p>No hay conversaciones aún.</p>
+                    <span>Los mensajes aparecerán aquí cuando alguien escriba al bot.</span>
+                </div>
+
+                <div class="inbox-list" id="inbox-list"></div>
+            </div>
+
+            <!-- CHAT VIEW: single conversation -->
+            <div id="chat-view" class="chat-view chat-view--hidden">
+                <div class="chat-topbar">
+                    <button class="btn btn--ghost btn--icon" id="btn-back-inbox">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="15 18 9 12 15 6"/></svg>
+                    </button>
+                    <div class="chat-topbar__info">
+                        <span class="chat-topbar__name" id="chat-contact-name">Contacto</span>
+                        <span class="chat-topbar__phone" id="chat-contact-phone">+00 000 000 0000</span>
+                    </div>
+                    <div class="chat-topbar__status">
+                        <span class="status-dot status-dot--on" id="chat-bot-dot"></span>
+                        <span id="chat-bot-label">Bot activo</span>
+                    </div>
+                </div>
+
+                <div class="chat-messages" id="chat-messages"></div>
+
+                <div class="chat-input-bar">
+                    <textarea class="chat-input" id="chat-input" rows="1" placeholder="Escribe un mensaje manual..."></textarea>
+                    <button class="btn btn--primary btn--icon" id="btn-send-message">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
+                    </button>
+                </div>
+            </div>
+        </section>
+
+        <!-- ---- SECTION: Planes / Suscripción ---- -->
+        <section class="section section--hidden" id="section-plans">
+            <h1 class="section__title">Planes</h1>
+            <p class="section__subtitle">Elige el plan que mejor se adapte a tu negocio.</p>
+
+            <!-- Subscription status banner -->
+            <div class="sub-status" id="sub-status" style="display:none;">
+                <div class="sub-status__icon">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
+                </div>
+                <div class="sub-status__info">
+                    <strong id="sub-status-plan">Plan Activo</strong>
+                    <span id="sub-status-expires">Expira: --</span>
+                </div>
+                <span class="sub-status__badge" id="sub-status-badge">Activo</span>
+            </div>
+
+            <!-- Plans grid -->
+            <div class="plans-grid">
+                <!-- Plan Mensual -->
+                <div class="plan-card" data-plan="monthly">
+                    <div class="plan-card__header">
+                        <h3 class="plan-card__name">Mensual</h3>
+                        <p class="plan-card__desc">Ideal para probar Botly</p>
+                    </div>
+                    <div class="plan-card__price">
+                        <span class="plan-card__amount">$79</span>
+                        <span class="plan-card__currency">MXN / mes</span>
+                    </div>
+                    <ul class="plan-card__features">
+                        <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg> Bot de WhatsApp con IA</li>
+                        <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg> Mensajes ilimitados</li>
+                        <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg> Dashboard completo</li>
+                        <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg> 1 mes de acceso</li>
+                    </ul>
+                    <button class="btn btn--outline btn--block btn-subscribe" data-plan="monthly">
+                        Suscribirse
+                    </button>
+                </div>
+
+                <!-- Plan Trimestral -->
+                <div class="plan-card plan-card--popular" data-plan="quarterly">
+                    <div class="plan-card__badge">+1 mes gratis</div>
+                    <div class="plan-card__header">
+                        <h3 class="plan-card__name">Trimestral</h3>
+                        <p class="plan-card__desc">El más popular</p>
+                    </div>
+                    <div class="plan-card__price">
+                        <span class="plan-card__amount">$237</span>
+                        <span class="plan-card__currency">MXN / 3 meses</span>
+                    </div>
+                    <div class="plan-card__savings">Pagas 3, recibes 4 meses</div>
+                    <ul class="plan-card__features">
+                        <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg> Bot de WhatsApp con IA</li>
+                        <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg> Mensajes ilimitados</li>
+                        <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg> Dashboard completo</li>
+                        <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg> 4 meses de acceso</li>
+                        <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg> <strong>1 mes de regalo</strong></li>
+                    </ul>
+                    <button class="btn btn--primary btn--block btn-subscribe" data-plan="quarterly">
+                        Suscribirse — Más popular
+                    </button>
+                </div>
+
+                <!-- Plan Anual -->
+                <div class="plan-card" data-plan="yearly">
+                    <div class="plan-card__badge plan-card__badge--gold">+6 meses gratis</div>
+                    <div class="plan-card__header">
+                        <h3 class="plan-card__name">Anual</h3>
+                        <p class="plan-card__desc">Mejor valor</p>
+                    </div>
+                    <div class="plan-card__price">
+                        <span class="plan-card__amount">$948</span>
+                        <span class="plan-card__currency">MXN / año</span>
+                    </div>
+                    <div class="plan-card__savings">Pagas 12, recibes 18 meses</div>
+                    <ul class="plan-card__features">
+                        <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg> Bot de WhatsApp con IA</li>
+                        <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg> Mensajes ilimitados</li>
+                        <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg> Dashboard completo</li>
+                        <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg> 18 meses de acceso</li>
+                        <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg> <strong>6 meses de regalo</strong></li>
+                    </ul>
+                    <button class="btn btn--outline btn--block btn-subscribe" data-plan="yearly">
+                        Suscribirse — Mejor valor
+                    </button>
+                </div>
+            </div>
+
+            <!-- Payment method info -->
+            <div class="plans-footer">
+                <div class="plans-footer__secure">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+                    <span>Pago seguro con Stripe. Aceptamos Visa, Mastercard, AMEX y más.</span>
+                </div>
+            </div>
+        </section>
+    </main>
+</body>
+</html>

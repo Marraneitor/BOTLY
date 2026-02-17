@@ -1,0 +1,36 @@
+# Entorno
+.env
+.env.*
+!.env.example
+node_modules/
+__pycache__/
+*.pyc
+
+# WhatsApp session
+.wwebjs_auth/
+.wwebjs_cache/
+
+# Firebase credentials (NEVER commit)
+firebase-service-account.json
+**/firebase-service-account.json
+
+# Data files with user info
+whatsapp-bot-saas/data/
+whatsapp-bot-saas-1/data/
+
+# Logs
+*.log
+bot_startup.log
+bridge_output.log
+flask_output.log
+
+# IDE
+.vscode/
+.idea/
+
+# OS
+Thumbs.db
+.DS_Store
+
+# Lock files (optional, remove if you want reproducible builds)
+package-lock.json
