@@ -930,6 +930,15 @@ async function startBot(uid, email) {
     const room = `user_${uid}`;
     console.log(`\n[Bot] Starting for ${email} (${uid})`);
 
+    // If there's already a running bot, clean it up first
+    const existing = userBots.get(uid);
+    if (existing && existing.sock) {
+        try {
+            existing.sock.ev.removeAllListeners();
+            existing.sock.end(undefined);
+        } catch(e) { /* ignore */ }
+    }
+
     const botState = {
         sock: null,
         status: 'starting',
@@ -958,7 +967,10 @@ async function startBot(uid, email) {
         browser: ['Botly', 'Chrome', '120.0.0'],
         generateHighQualityLinkPreview: false,
         syncFullHistory: false,
-        markOnlineOnConnect: true
+        markOnlineOnConnect: true,
+        connectTimeoutMs: 60000,
+        qrTimeout: 40000,
+        defaultQueryTimeoutMs: 0
     });
 
     botState.sock = sock;
