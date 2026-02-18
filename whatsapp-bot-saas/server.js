@@ -365,12 +365,17 @@ app.post('/api/bot/start', authMiddleware, async (req, res) => {
         return res.json({ ok: true, message: `Bot ya está en estado: ${existing.status}` });
     }
 
+    // Persist bot-active flag so it auto-restarts on server reboot
+    await saveUserConfig(uid, { botActive: true, botEmail: req.email });
+
     startBot(uid, req.email);
     res.json({ ok: true, message: 'Bot iniciando… el QR aparecerá en segundos.' });
 });
 
 app.post('/api/bot/stop', authMiddleware, async (req, res) => {
     await stopBot(req.uid);
+    // Clear persistent flag so bot doesn't auto-restart on server reboot
+    await saveUserConfig(req.uid, { botActive: false });
     res.json({ ok: true, message: 'Bot detenido.' });
 });
 
@@ -393,7 +398,10 @@ app.post('/api/bot/reset', authMiddleware, async (req, res) => {
         console.error(`[Bot] Error removing auth data:`, e.message);
     }
 
-    // 3. Restart the bot — a new QR will be emitted via socket
+    // 3. Keep bot-active flag on (reset ≠ stop, user wants to reconnect)
+    await saveUserConfig(uid, { botActive: true, botEmail: req.email });
+
+    // 4. Restart the bot — a new QR will be emitted via socket
     startBot(uid, req.email);
     res.json({ ok: true, message: 'Sesión reseteada. Un nuevo QR aparecerá en segundos.' });
 });
@@ -1103,6 +1111,7 @@ app.post('/api/admin/users/:uid/revoke', authMiddleware, adminMiddleware, async 
 app.post('/api/admin/users/:uid/kill-bot', authMiddleware, adminMiddleware, async (req, res) => {
     const { uid } = req.params;
     await stopBot(uid);
+    await saveUserConfig(uid, { botActive: false });
     res.json({ ok: true, message: 'Bot detenido.' });
 });
 
@@ -1292,6 +1301,8 @@ async function startBot(uid, email) {
                         fs.rmSync(authDir, { recursive: true, force: true });
                         console.log(`[Bot] Auth cleared for ${email} (logged out)`);
                     } catch (e) { /* ignore */ }
+                    // User logged out from phone — clear persistent flag
+                    saveUserConfig(uid, { botActive: false }).catch(() => {});
                 }
 
                 console.log(`[Bot] Disconnected for ${email}: ${statusCode === DisconnectReason.loggedOut ? 'logged_out' : 'max_retries'}`);
@@ -1428,6 +1439,68 @@ async function stopBot(uid) {
     console.log(`[Bot] Stopped for ${uid}`);
 }
 
+// ══════════════════════════════════════════════════════════
+//  AUTO-START BOTS — Restore persistent sessions on server boot
+// ══════════════════════════════════════════════════════════
+
+async function autoStartBots() {
+    console.log('[AutoStart] Checking for bots to restore…');
+    try {
+        // Query Firestore for all users with botActive: true
+        const snapshot = await db.collection('users')
+            .where('botActive', '==', true)
+            .get();
+
+        if (snapshot.empty) {
+            console.log('[AutoStart] No active bots to restore.');
+            return;
+        }
+
+        let started = 0;
+        for (const doc of snapshot.docs) {
+            const uid = doc.id;
+            const data = doc.data();
+            const email = data.botEmail || data.email || 'unknown';
+
+            // Only auto-start if the user has saved Baileys auth (already paired)
+            const authDir = path.join(__dirname, '.baileys_auth', uid);
+            if (!fs.existsSync(authDir)) {
+                console.log(`[AutoStart] Skipping ${email} (${uid}) — no auth session on disk`);
+                // Clear stale flag
+                saveUserConfig(uid, { botActive: false }).catch(() => {});
+                continue;
+            }
+
+            // Check subscription is still valid (skip for admin)
+            const isAdmin = FREE_PASS_EMAILS.includes(email);
+            if (!isAdmin) {
+                const sub = data.subscription;
+                if (!sub || !sub.expiresAt || new Date(sub.expiresAt) <= new Date()) {
+                    console.log(`[AutoStart] Skipping ${email} (${uid}) — subscription expired`);
+                    saveUserConfig(uid, { botActive: false }).catch(() => {});
+                    continue;
+                }
+            }
+
+            // Don't start if already running (safeguard)
+            if (userBots.has(uid)) continue;
+
+            console.log(`[AutoStart] Restoring bot for ${email} (${uid})`);
+            startBot(uid, email);
+            started++;
+
+            // Stagger starts by 2 seconds to avoid overwhelming WhatsApp
+            if (started < snapshot.size) {
+                await new Promise(r => setTimeout(r, 2000));
+            }
+        }
+
+        console.log(`[AutoStart] Restored ${started} bot(s).`);
+    } catch (err) {
+        console.error('[AutoStart] Error restoring bots:', err.message);
+    }
+}
+
 // ─── Start Server ────────────────────────────────────────
 server.listen(PORT, () => {
     console.log('━'.repeat(50));
@@ -1436,4 +1509,7 @@ server.listen(PORT, () => {
     console.log(`📊 Dashboard: http://localhost:${PORT}/`);
     console.log('━'.repeat(50));
     console.log('Cada usuario obtiene su propio bot al registrarse\n');
+
+    // Auto-restart bots that were active before server shutdown
+    setTimeout(() => autoStartBots(), 3000);
 });
