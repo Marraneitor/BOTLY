@@ -47,6 +47,11 @@
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/></svg>
                 Planes
             </a>
+            <a href="#" class="sidebar__link" data-section="ventas">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
+                Ventas
+                <span class="sidebar__beta-badge">Beta</span>
+            </a>
             <a href="/admin" class="sidebar__link sidebar__link--admin" id="admin-link" style="display:none;">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>
                 Admin Panel
@@ -444,6 +449,98 @@
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
                     <span>Pago seguro con Stripe. Aceptamos Visa, Mastercard, AMEX y más.</span>
                 </div>
+            </div>
+        </section>
+
+        <!-- ---- SECTION: Ventas (Beta) ---- -->
+        <section class="section section--hidden" id="section-ventas">
+            <div class="ventas-header">
+                <div class="ventas-header__left">
+                    <h1 class="section__title">
+                        Ventas &amp; Oportunidades
+                        <span class="beta-tag">Beta</span>
+                    </h1>
+                    <p class="section__subtitle">Análisis inteligente de tus conversaciones para detectar ventas, citas y oportunidades.</p>
+                </div>
+                <div class="ventas-header__actions">
+                    <button class="btn btn--primary btn--lg" id="btn-analyze-ventas">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg>
+                        Analizar conversaciones
+                    </button>
+                </div>
+            </div>
+
+            <!-- Stats summary cards -->
+            <div class="ventas-stats" id="ventas-stats" style="display:none;">
+                <div class="ventas-stat-card ventas-stat-card--sales">
+                    <div class="ventas-stat-card__icon">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
+                    </div>
+                    <div class="ventas-stat-card__body">
+                        <span class="ventas-stat-card__value" id="ventas-total-sales">0</span>
+                        <span class="ventas-stat-card__label">Ventas detectadas</span>
+                    </div>
+                </div>
+                <div class="ventas-stat-card ventas-stat-card--appointments">
+                    <div class="ventas-stat-card__icon">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+                    </div>
+                    <div class="ventas-stat-card__body">
+                        <span class="ventas-stat-card__value" id="ventas-total-appointments">0</span>
+                        <span class="ventas-stat-card__label">Citas agendadas</span>
+                    </div>
+                </div>
+                <div class="ventas-stat-card ventas-stat-card--leads">
+                    <div class="ventas-stat-card__icon">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+                    </div>
+                    <div class="ventas-stat-card__body">
+                        <span class="ventas-stat-card__value" id="ventas-total-leads">0</span>
+                        <span class="ventas-stat-card__label">Leads interesados</span>
+                    </div>
+                </div>
+                <div class="ventas-stat-card ventas-stat-card--conversations">
+                    <div class="ventas-stat-card__icon">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+                    </div>
+                    <div class="ventas-stat-card__body">
+                        <span class="ventas-stat-card__value" id="ventas-total-analyzed">0</span>
+                        <span class="ventas-stat-card__label">Conversaciones analizadas</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Loading state -->
+            <div class="ventas-loading" id="ventas-loading" style="display:none;">
+                <div class="ventas-loading__spinner"></div>
+                <p class="ventas-loading__text">Analizando conversaciones con IA...</p>
+                <p class="ventas-loading__subtext">Esto puede tomar unos segundos</p>
+            </div>
+
+            <!-- Empty state -->
+            <div class="ventas-empty" id="ventas-empty">
+                <div class="ventas-empty__icon">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" width="64" height="64">
+                        <path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/>
+                    </svg>
+                </div>
+                <h3>Descubre tus ventas ocultas</h3>
+                <p>Haz clic en <strong>"Analizar conversaciones"</strong> para que la IA revise tus chats de WhatsApp y detecte ventas, citas y oportunidades de negocio.</p>
+            </div>
+
+            <!-- Results list -->
+            <div class="ventas-results" id="ventas-results" style="display:none;">
+                <div class="ventas-results__header">
+                    <h2>Resultados del análisis</h2>
+                    <div class="ventas-results__filters">
+                        <button class="ventas-filter ventas-filter--active" data-filter="all">Todos</button>
+                        <button class="ventas-filter" data-filter="sale">Ventas</button>
+                        <button class="ventas-filter" data-filter="appointment">Citas</button>
+                        <button class="ventas-filter" data-filter="lead">Leads</button>
+                        <button class="ventas-filter" data-filter="no_result">Sin resultado</button>
+                    </div>
+                </div>
+                <div class="ventas-list" id="ventas-list"></div>
             </div>
         </section>
     </main>

@@ -1199,6 +1199,207 @@
         tryRender();
     }
 
+    // ══════════════════════════════════════════════════════════
+    //  VENTAS (BETA) — Sales Analysis
+    // ══════════════════════════════════════════════════════════
+    (function initVentas() {
+        var btnAnalyze = $('#btn-analyze-ventas');
+        var ventasStats = $('#ventas-stats');
+        var ventasLoading = $('#ventas-loading');
+        var ventasEmpty = $('#ventas-empty');
+        var ventasResults = $('#ventas-results');
+        var ventasList = $('#ventas-list');
+        var filterBtns = $$('.ventas-filter');
+
+        var analysisData = []; // store results for filtering
+
+        if (!btnAnalyze) return;
+
+        // Filter buttons
+        filterBtns.forEach(function(btn) {
+            btn.addEventListener('click', function() {
+                filterBtns.forEach(function(b) { b.classList.remove('ventas-filter--active'); });
+                btn.classList.add('ventas-filter--active');
+                var filter = btn.dataset.filter;
+                renderVentasList(filter === 'all' ? analysisData : analysisData.filter(function(r) { return r.type === filter; }));
+            });
+        });
+
+        // Analyze button
+        btnAnalyze.addEventListener('click', function() {
+            ventasEmpty.style.display = 'none';
+            ventasResults.style.display = 'none';
+            ventasStats.style.display = 'none';
+            ventasLoading.style.display = 'flex';
+            btnAnalyze.disabled = true;
+            btnAnalyze.innerHTML =
+                '<svg class="ventas-loading__spinner" style="width:16px;height:16px;border-width:2px;margin:0 .4rem 0 0;" viewBox="0 0 24 24"></svg>' +
+                'Analizando...';
+
+            fetch(API + '/ventas/analyze', {
+                method: 'POST',
+                headers: authHeaders()
+            })
+            .then(function(r) { return r.json(); })
+            .then(function(data) {
+                ventasLoading.style.display = 'none';
+                btnAnalyze.disabled = false;
+                btnAnalyze.innerHTML =
+                    '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg>' +
+                    'Analizar conversaciones';
+
+                if (!data.ok || !data.data || data.data.length === 0) {
+                    ventasEmpty.style.display = 'flex';
+                    return;
+                }
+
+                analysisData = data.data;
+                updateVentasStats(analysisData);
+                ventasStats.style.display = 'grid';
+                ventasResults.style.display = 'block';
+                // Reset filter to 'all'
+                filterBtns.forEach(function(b) { b.classList.remove('ventas-filter--active'); });
+                var allBtn = document.querySelector('.ventas-filter[data-filter="all"]');
+                if (allBtn) allBtn.classList.add('ventas-filter--active');
+                renderVentasList(analysisData);
+            })
+            .catch(function(err) {
+                console.error('[Ventas] Analysis error:', err);
+                ventasLoading.style.display = 'none';
+                ventasEmpty.style.display = 'flex';
+                btnAnalyze.disabled = false;
+                btnAnalyze.innerHTML =
+                    '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg>' +
+                    'Analizar conversaciones';
+                showToast('Error al analizar conversaciones', 'error');
+            });
+        });
+
+        function updateVentasStats(results) {
+            var sales = 0, appointments = 0, leads = 0;
+            results.forEach(function(r) {
+                if (r.type === 'sale') sales++;
+                else if (r.type === 'appointment') appointments++;
+                else if (r.type === 'lead') leads++;
+            });
+            var totalSalesEl = $('#ventas-total-sales');
+            var totalAppEl = $('#ventas-total-appointments');
+            var totalLeadsEl = $('#ventas-total-leads');
+            var totalAnalyzedEl = $('#ventas-total-analyzed');
+            if (totalSalesEl) totalSalesEl.textContent = sales;
+            if (totalAppEl) totalAppEl.textContent = appointments;
+            if (totalLeadsEl) totalLeadsEl.textContent = leads;
+            if (totalAnalyzedEl) totalAnalyzedEl.textContent = results.length;
+        }
+
+        function renderVentasList(results) {
+            if (!ventasList) return;
+            ventasList.innerHTML = '';
+
+            if (results.length === 0) {
+                ventasList.innerHTML = '<div style="text-align:center;padding:2rem;color:var(--text-muted);font-size:.9rem;">No se encontraron resultados con este filtro.</div>';
+                return;
+            }
+
+            results.forEach(function(r, idx) {
+                var typeLabels = {
+                    sale: 'Venta',
+                    appointment: 'Cita',
+                    lead: 'Lead interesado',
+                    no_result: 'Sin resultado'
+                };
+                var typeIcons = {
+                    sale: '$',
+                    appointment: '📅',
+                    lead: '👤',
+                    no_result: '—'
+                };
+
+                var initials = (r.contactName || r.phone || '??')
+                    .replace(/[^a-zA-ZáéíóúÁÉÍÓÚñÑ\s]/g, '')
+                    .split(' ')
+                    .map(function(w) { return w[0]; })
+                    .join('')
+                    .toUpperCase()
+                    .slice(0, 2) || '??';
+
+                var card = document.createElement('div');
+                card.className = 'ventas-item';
+                card.dataset.type = r.type;
+
+                var detailsHtml = '';
+                if (r.product) {
+                    detailsHtml += '<div class="ventas-detail"><span class="ventas-detail__label">Producto:</span><span class="ventas-detail__value">' + escHtml(r.product) + '</span></div>';
+                }
+                if (r.amount) {
+                    detailsHtml += '<div class="ventas-detail"><span class="ventas-detail__label">Monto:</span><span class="ventas-detail__value">' + escHtml(r.amount) + '</span></div>';
+                }
+                if (r.date) {
+                    detailsHtml += '<div class="ventas-detail"><span class="ventas-detail__label">Fecha:</span><span class="ventas-detail__value">' + escHtml(r.date) + '</span></div>';
+                }
+                if (r.confidence) {
+                    detailsHtml += '<div class="ventas-detail"><span class="ventas-detail__label">Confianza:</span><span class="ventas-detail__value">' + r.confidence + '%</span></div>';
+                }
+
+                // Preview messages
+                var previewHtml = '';
+                if (r.relevantMessages && r.relevantMessages.length > 0) {
+                    r.relevantMessages.forEach(function(m) {
+                        var cls = m.direction === 'incoming' ? 'ventas-preview-msg--incoming' : 'ventas-preview-msg--outgoing';
+                        var sender = m.direction === 'incoming' ? (r.contactName || r.phone) : 'Bot';
+                        previewHtml += '<div class="ventas-preview-msg ' + cls + '">' +
+                            '<span class="ventas-preview-msg__sender">' + escHtml(sender) + ':</span>' +
+                            escHtml(m.body) +
+                            '</div>';
+                    });
+                }
+
+                card.innerHTML =
+                    '<div class="ventas-item__top">' +
+                        '<div class="ventas-item__contact">' +
+                            '<div class="ventas-item__avatar ventas-item__avatar--' + r.type + '">' + initials + '</div>' +
+                            '<div>' +
+                                '<div class="ventas-item__name">' + escHtml(r.contactName || r.phone) + '</div>' +
+                                '<div class="ventas-item__phone">' + escHtml(r.phone) + '</div>' +
+                            '</div>' +
+                        '</div>' +
+                        '<span class="ventas-badge ventas-badge--' + r.type + '">' + typeIcons[r.type] + ' ' + (typeLabels[r.type] || r.type) + '</span>' +
+                    '</div>' +
+                    '<p class="ventas-item__summary">' + escHtml(r.summary) + '</p>' +
+                    (detailsHtml ? '<div class="ventas-item__details">' + detailsHtml + '</div>' : '') +
+                    (previewHtml ?
+                        '<button class="ventas-item__toggle" data-idx="' + idx + '">' +
+                            '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"/></svg>' +
+                            'Ver conversación relevante' +
+                        '</button>' +
+                        '<div class="ventas-item__preview" id="ventas-preview-' + idx + '">' + previewHtml + '</div>'
+                    : '');
+
+                ventasList.appendChild(card);
+            });
+
+            // Toggle preview
+            ventasList.querySelectorAll('.ventas-item__toggle').forEach(function(btn) {
+                btn.addEventListener('click', function() {
+                    var preview = document.getElementById('ventas-preview-' + btn.dataset.idx);
+                    if (preview) {
+                        var isOpen = preview.classList.contains('ventas-item__preview--open');
+                        preview.classList.toggle('ventas-item__preview--open');
+                        btn.classList.toggle('ventas-item__toggle--open');
+                        btn.querySelector('svg').nextSibling.textContent = isOpen ? ' Ver conversación relevante' : ' Ocultar conversación';
+                    }
+                });
+            });
+        }
+
+        function escHtml(text) {
+            if (!text) return '';
+            var div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+    })();
+
     if (document.readyState === 'loading') {
         document.addEventListener('DOMContentLoaded', init);
     } else {

@@ -472,6 +472,161 @@ app.delete('/api/messages', authMiddleware, async (req, res) => {
 });
 
 // ══════════════════════════════════════════════════════════
+//  VENTAS (BETA) — AI-powered sales analysis
+// ══════════════════════════════════════════════════════════
+
+app.post('/api/ventas/analyze', authMiddleware, async (req, res) => {
+    try {
+        const msgs = await loadMessages(req.uid);
+        if (!msgs || msgs.length === 0) {
+            return res.json({ ok: true, data: [] });
+        }
+
+        // Group messages by contact
+        const convos = {};
+        msgs.forEach(m => {
+            const key = m.from;
+            if (!convos[key]) {
+                convos[key] = { phone: key, senderName: m.senderName || key, messages: [] };
+            }
+            convos[key].messages.push(m);
+            if (m.senderName && m.senderName !== 'Bot' && m.senderName !== 'Tú (manual)') {
+                convos[key].senderName = m.senderName;
+            }
+        });
+
+        const conversations = Object.values(convos);
+        // Only analyze conversations with at least 3 messages
+        const toAnalyze = conversations.filter(c => c.messages.length >= 3);
+
+        if (toAnalyze.length === 0) {
+            return res.json({ ok: true, data: [] });
+        }
+
+        const apiKey = process.env.GEMINI_API_KEY;
+        if (!apiKey) {
+            return res.status(500).json({ error: 'GEMINI_API_KEY no configurada.' });
+        }
+
+        const { GoogleGenerativeAI } = require('@google/generative-ai');
+        const genAI = new GoogleGenerativeAI(apiKey);
+        const model = genAI.getGenerativeModel({ model: 'gemini-2.0-flash' });
+
+        const results = [];
+
+        // Analyze in batches of up to 5 conversations per prompt to save API calls
+        const BATCH_SIZE = 5;
+        for (let i = 0; i < toAnalyze.length; i += BATCH_SIZE) {
+            const batch = toAnalyze.slice(i, i + BATCH_SIZE);
+
+            const convoTexts = batch.map((c, idx) => {
+                const lastMsgs = c.messages.slice(-30); // last 30 msgs
+                const transcript = lastMsgs.map(m => {
+                    const who = m.direction === 'incoming' ? (c.senderName || c.phone) : 'Bot';
+                    return `[${who}]: ${m.body}`;
+                }).join('\n');
+                return `--- CONVERSACIÓN ${idx + 1} (Contacto: ${c.senderName || c.phone}, Tel: ${c.phone}) ---\n${transcript}\n--- FIN CONVERSACIÓN ${idx + 1} ---`;
+            }).join('\n\n');
+
+            const prompt = `Eres un analista de ventas experto. Analiza las siguientes conversaciones de WhatsApp entre un negocio (Bot) y clientes.
+
+Para CADA conversación, determina:
+1. **type**: El tipo de resultado. DEBE ser uno de: "sale" (se concretó una venta/compra), "appointment" (se agendó una cita/reunión/visita), "lead" (el cliente mostró interés pero no se concretó nada), "no_result" (conversación casual, consulta sin interés real, o spam).
+2. **summary**: Un resumen breve (1-2 oraciones) en español de lo que pasó en la conversación.
+3. **product**: Si aplica, qué producto/servicio se vendió o se preguntó. Dejar vacío si no aplica.
+4. **amount**: Si se mencionó un precio o monto, indicarlo. Dejar vacío si no se mencionó.
+5. **date**: Si se mencionó una fecha para cita o entrega, indicarla. Dejar vacío si no aplica.
+6. **confidence**: Nivel de confianza de tu clasificación (0-100).
+7. **relevantMsgIndices**: Array de índices (0-based) de los mensajes más relevantes para la clasificación (máximo 5 mensajes).
+
+Responde SOLO con un JSON array válido. Cada elemento corresponde a una conversación en orden. Ejemplo:
+[
+  {"type":"sale","summary":"El cliente compró 2 pizzas grandes.","product":"Pizza grande x2","amount":"$300","date":"","confidence":90,"relevantMsgIndices":[3,5,8,12]},
+  {"type":"no_result","summary":"Solo preguntó el horario.","product":"","amount":"","date":"","confidence":95,"relevantMsgIndices":[0,1]}
+]
+
+CONVERSACIONES A ANALIZAR:
+${convoTexts}`;
+
+            try {
+                const result = await model.generateContent(prompt);
+                const responseText = result.response.text();
+                // Extract JSON from response (handle markdown code blocks)
+                let jsonStr = responseText;
+                const jsonMatch = responseText.match(/```(?:json)?\s*([\s\S]*?)```/);
+                if (jsonMatch) jsonStr = jsonMatch[1];
+                jsonStr = jsonStr.trim();
+
+                const parsed = JSON.parse(jsonStr);
+
+                if (Array.isArray(parsed)) {
+                    parsed.forEach((analysis, idx) => {
+                        if (idx < batch.length) {
+                            const conv = batch[idx];
+                            const lastMsgs = conv.messages.slice(-30);
+                            const relevantMsgs = (analysis.relevantMsgIndices || [])
+                                .filter(i => i >= 0 && i < lastMsgs.length)
+                                .slice(0, 5)
+                                .map(i => ({
+                                    body: lastMsgs[i].body,
+                                    direction: lastMsgs[i].direction,
+                                    timestamp: lastMsgs[i].timestamp
+                                }));
+
+                            results.push({
+                                phone: conv.phone,
+                                contactName: conv.senderName,
+                                type: ['sale','appointment','lead','no_result'].includes(analysis.type) ? analysis.type : 'no_result',
+                                summary: analysis.summary || 'Sin resumen disponible.',
+                                product: analysis.product || '',
+                                amount: analysis.amount || '',
+                                date: analysis.date || '',
+                                confidence: Math.min(100, Math.max(0, parseInt(analysis.confidence) || 50)),
+                                relevantMessages: relevantMsgs,
+                                totalMessages: conv.messages.length
+                            });
+                        }
+                    });
+                }
+            } catch (parseErr) {
+                console.error('[Ventas] AI parse error for batch:', parseErr.message);
+                // Add fallback results for this batch
+                batch.forEach(conv => {
+                    results.push({
+                        phone: conv.phone,
+                        contactName: conv.senderName,
+                        type: 'no_result',
+                        summary: 'No se pudo analizar esta conversación.',
+                        product: '',
+                        amount: '',
+                        date: '',
+                        confidence: 0,
+                        relevantMessages: [],
+                        totalMessages: conv.messages.length
+                    });
+                });
+            }
+
+            // Small delay between batches to avoid rate limiting
+            if (i + BATCH_SIZE < toAnalyze.length) {
+                await new Promise(r => setTimeout(r, 1000));
+            }
+        }
+
+        // Sort: sales first, then appointments, leads, no_result
+        const typePriority = { sale: 0, appointment: 1, lead: 2, no_result: 3 };
+        results.sort((a, b) => (typePriority[a.type] || 3) - (typePriority[b.type] || 3));
+
+        console.log(`[Ventas] Analyzed ${toAnalyze.length} conversations for ${req.email}: ${results.filter(r => r.type === 'sale').length} sales, ${results.filter(r => r.type === 'appointment').length} appointments, ${results.filter(r => r.type === 'lead').length} leads`);
+        res.json({ ok: true, data: results });
+
+    } catch (err) {
+        console.error('[Ventas] Analysis error:', err);
+        res.status(500).json({ error: 'Error al analizar conversaciones: ' + err.message });
+    }
+});
+
+// ══════════════════════════════════════════════════════════
 //  RESPONSE MODE & PER-CHAT PAUSE ROUTES
 // ══════════════════════════════════════════════════════════
 
