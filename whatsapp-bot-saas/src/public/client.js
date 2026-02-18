@@ -1400,6 +1400,273 @@
         }
     })();
 
+    // ============================================================
+    //  ADMIN PANEL — Users, Gift Time, Conversations Viewer
+    // ============================================================
+    (function () {
+        var ADMIN_EMAILS = ['yoelskygold@gmail.com'];
+        if (!user.email || ADMIN_EMAILS.indexOf(user.email) === -1) return;
+
+        // --- DOM refs ---
+        var kpiTotal   = document.getElementById('admin-kpi-total');
+        var kpiActive  = document.getElementById('admin-kpi-active');
+        var kpiExpired = document.getElementById('admin-kpi-expired');
+        var kpiBots    = document.getElementById('admin-kpi-bots');
+        var tbody      = document.getElementById('admin-users-tbody');
+        var refreshBtn = document.getElementById('btn-admin-refresh');
+        var modal      = document.getElementById('admin-user-modal');
+        var modalClose = document.getElementById('admin-modal-close');
+        var modalTitle = document.getElementById('admin-modal-title');
+        var modalInfo  = document.getElementById('admin-modal-info');
+        var giftResult = document.getElementById('admin-gift-result');
+        var convosCount  = document.getElementById('admin-convos-count');
+        var convosLoading = document.getElementById('admin-convos-loading');
+        var convosList   = document.getElementById('admin-convos-list');
+
+        var cachedUsers = [];
+        var currentModalUid = null;
+
+        // --- Load KPIs ---
+        function loadMetrics() {
+            apiCall('/admin/metrics').then(function (res) {
+                if (!res.ok || !res.data) return;
+                var d = res.data;
+                if (kpiTotal) kpiTotal.textContent = d.totalUsers || 0;
+                if (kpiActive) kpiActive.textContent = d.activeSubs || 0;
+                if (kpiExpired) kpiExpired.textContent = d.cancelledSubs || 0;
+                if (kpiBots) kpiBots.textContent = d.activeBots || 0;
+            }).catch(function () {});
+        }
+
+        // --- Time remaining helper ---
+        function timeRemaining(expiresAt) {
+            if (!expiresAt) return { text: 'Sin plan', cls: '' };
+            var now = Date.now();
+            var exp = new Date(expiresAt).getTime();
+            var diff = exp - now;
+            if (diff <= 0) return { text: 'Expirado', cls: 'admin-time-remaining--expired' };
+            var days = Math.floor(diff / 86400000);
+            var hours = Math.floor((diff % 86400000) / 3600000);
+            if (days > 7) return { text: days + ' días', cls: 'admin-time-remaining--ok' };
+            if (days >= 1) return { text: days + 'd ' + hours + 'h', cls: 'admin-time-remaining--urgent' };
+            return { text: hours + ' horas', cls: 'admin-time-remaining--urgent' };
+        }
+
+        // --- Render users table ---
+        function renderUsers(users) {
+            cachedUsers = users;
+            if (!tbody) return;
+            tbody.innerHTML = '';
+
+            users.forEach(function (u) {
+                var tr = document.createElement('tr');
+                var time = timeRemaining(u.expiresAt);
+                var statusBadge = u.status === 'active'
+                    ? '<span class="admin-badge admin-badge--active">Activa</span>'
+                    : u.status === 'expired'
+                        ? '<span class="admin-badge admin-badge--expired">Expirada</span>'
+                        : '<span class="admin-badge admin-badge--free">Gratis</span>';
+                var botBadge = u.botStatus === 'connected'
+                    ? '<span class="admin-badge admin-badge--bot-on">Conectado</span>'
+                    : u.botStatus === 'qr'
+                        ? '<span class="admin-badge admin-badge--bot-on">QR</span>'
+                        : '<span class="admin-badge admin-badge--bot-off">Off</span>';
+
+                tr.innerHTML =
+                    '<td><div class="admin-user-cell"><strong>' + esc(u.name || u.email) + '</strong><small>' + esc(u.email) + '</small></div></td>' +
+                    '<td>' + esc(u.planName || 'Gratis') + '</td>' +
+                    '<td>' + statusBadge + '</td>' +
+                    '<td><span class="admin-time-remaining ' + time.cls + '">' + time.text + '</span></td>' +
+                    '<td>' + botBadge + '</td>' +
+                    '<td><button class="admin-btn-detail" data-uid="' + u.uid + '">Ver detalles</button></td>';
+                tbody.appendChild(tr);
+            });
+
+            // Bind detail buttons
+            tbody.querySelectorAll('.admin-btn-detail').forEach(function (btn) {
+                btn.addEventListener('click', function () {
+                    openModal(btn.dataset.uid);
+                });
+            });
+        }
+
+        function esc(s) { return s ? s.replace(/</g, '&lt;').replace(/>/g, '&gt;') : ''; }
+
+        // --- Load users ---
+        function loadUsers() {
+            apiCall('/admin/users').then(function (res) {
+                if (res.ok && res.data) renderUsers(res.data);
+            }).catch(function () {});
+        }
+
+        // --- Open modal ---
+        function openModal(uid) {
+            currentModalUid = uid;
+            var u = cachedUsers.filter(function (x) { return x.uid === uid; })[0];
+            if (!u) return;
+
+            if (modalTitle) modalTitle.textContent = u.name || u.email;
+            if (giftResult) { giftResult.textContent = ''; giftResult.style.display = 'none'; }
+
+            // Info grid
+            if (modalInfo) {
+                var time = timeRemaining(u.expiresAt);
+                modalInfo.innerHTML =
+                    '<div class="admin-info-item"><span class="admin-info-label">Email</span><span>' + esc(u.email) + '</span></div>' +
+                    '<div class="admin-info-item"><span class="admin-info-label">Negocio</span><span>' + esc(u.businessName || '—') + '</span></div>' +
+                    '<div class="admin-info-item"><span class="admin-info-label">Plan</span><span>' + esc(u.planName || 'Gratis') + '</span></div>' +
+                    '<div class="admin-info-item"><span class="admin-info-label">Estado</span><span>' + esc(u.status) + '</span></div>' +
+                    '<div class="admin-info-item"><span class="admin-info-label">Expira</span><span>' + (u.expiresAt ? new Date(u.expiresAt).toLocaleString('es-MX') : '—') + '</span></div>' +
+                    '<div class="admin-info-item"><span class="admin-info-label">Tiempo restante</span><span class="admin-time-remaining ' + time.cls + '">' + time.text + '</span></div>' +
+                    '<div class="admin-info-item"><span class="admin-info-label">Bot</span><span>' + esc(u.botStatus) + '</span></div>' +
+                    '<div class="admin-info-item"><span class="admin-info-label">UID</span><span style="font-size:.75rem;opacity:.7">' + esc(u.uid) + '</span></div>';
+            }
+
+            // Load conversations
+            if (convosList) convosList.innerHTML = '';
+            if (convosCount) convosCount.textContent = '0';
+            if (convosLoading) convosLoading.style.display = 'flex';
+            loadConversations(uid);
+
+            // Show modal
+            if (modal) modal.style.display = 'flex';
+        }
+
+        // --- Close modal ---
+        function closeModal() {
+            if (modal) modal.style.display = 'none';
+            currentModalUid = null;
+        }
+        if (modalClose) modalClose.addEventListener('click', closeModal);
+        if (modal) {
+            modal.addEventListener('click', function (e) {
+                if (e.target === modal) closeModal();
+            });
+        }
+
+        // --- Load conversations ---
+        function loadConversations(uid) {
+            apiCall('/admin/users/' + uid + '/conversations').then(function (res) {
+                if (convosLoading) convosLoading.style.display = 'none';
+                if (!res.ok || !res.data) return;
+                if (convosCount) convosCount.textContent = res.data.length + ' (' + (res.totalMessages || 0) + ' msgs)';
+                renderConversations(res.data);
+            }).catch(function () {
+                if (convosLoading) convosLoading.style.display = 'none';
+            });
+        }
+
+        function renderConversations(convos) {
+            if (!convosList) return;
+            convosList.innerHTML = '';
+
+            if (convos.length === 0) {
+                convosList.innerHTML = '<p style="opacity:.5;text-align:center;padding:1rem;">Sin conversaciones</p>';
+                return;
+            }
+
+            convos.forEach(function (c, idx) {
+                var item = document.createElement('div');
+                item.className = 'admin-convo-item';
+                var lastTime = c.lastTimestamp ? new Date(c.lastTimestamp).toLocaleString('es-MX') : '';
+                item.innerHTML =
+                    '<div class="admin-convo-item__header">' +
+                        '<div class="admin-convo-item__left">' +
+                            '<strong>' + esc(c.senderName || c.phone) + '</strong>' +
+                            '<small>' + esc(c.phone) + '</small>' +
+                        '</div>' +
+                        '<div class="admin-convo-item__right">' +
+                            '<small>' + lastTime + '</small>' +
+                            '<span class="admin-badge admin-badge--free">' + c.messages.length + ' msgs</span>' +
+                        '</div>' +
+                    '</div>' +
+                    '<div class="admin-convo-messages" id="admin-convo-msgs-' + idx + '" style="display:none;"></div>';
+                convosList.appendChild(item);
+
+                // Click to expand
+                var header = item.querySelector('.admin-convo-item__header');
+                header.style.cursor = 'pointer';
+                header.addEventListener('click', function () {
+                    var msgsDiv = document.getElementById('admin-convo-msgs-' + idx);
+                    if (!msgsDiv) return;
+                    var isOpen = msgsDiv.style.display !== 'none';
+                    msgsDiv.style.display = isOpen ? 'none' : 'block';
+                    if (!isOpen && msgsDiv.innerHTML === '') {
+                        // Render messages
+                        c.messages.forEach(function (m) {
+                            var bubble = document.createElement('div');
+                            bubble.className = 'admin-msg ' + (m.direction === 'outgoing' ? 'admin-msg--outgoing' : 'admin-msg--incoming');
+                            var time = m.timestamp ? new Date(m.timestamp).toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit' }) : '';
+                            bubble.innerHTML = '<p>' + esc(m.body || '') + '</p><span class="admin-msg__time">' + time + '</span>';
+                            msgsDiv.appendChild(bubble);
+                        });
+                    }
+                });
+            });
+        }
+
+        // --- Gift time buttons ---
+        document.querySelectorAll('.admin-gift-btn').forEach(function (btn) {
+            btn.addEventListener('click', function () {
+                if (!currentModalUid) return;
+                var duration = btn.dataset.gift;
+                btn.disabled = true;
+                btn.textContent = '...';
+
+                apiCall('/admin/users/' + currentModalUid + '/gift', {
+                    method: 'POST',
+                    body: JSON.stringify({ duration: duration })
+                }).then(function (res) {
+                    if (giftResult) {
+                        giftResult.textContent = res.message || 'Tiempo regalado correctamente.';
+                        giftResult.style.display = 'block';
+                    }
+                    // Refresh users list to update table
+                    loadUsers();
+                    // Refresh modal info after a brief delay
+                    setTimeout(function () {
+                        var u = cachedUsers.filter(function (x) { return x.uid === currentModalUid; })[0];
+                        if (u && modalInfo) {
+                            // Re-open info grid with fresh data
+                            openModal(currentModalUid);
+                        }
+                    }, 1000);
+                }).catch(function (err) {
+                    if (giftResult) {
+                        giftResult.textContent = 'Error: ' + (err.message || 'Fallo al regalar');
+                        giftResult.style.display = 'block';
+                        giftResult.style.color = '#ff6b6b';
+                    }
+                }).finally(function () {
+                    // Restore buttons
+                    var labels = { '1day': '+1 Día', '1week': '+1 Semana', '1month': '+1 Mes' };
+                    btn.disabled = false;
+                    btn.textContent = labels[duration] || duration;
+                });
+            });
+        });
+
+        // --- Refresh button ---
+        if (refreshBtn) {
+            refreshBtn.addEventListener('click', function () {
+                loadUsers();
+                loadMetrics();
+                showToast('Datos actualizados', 'success');
+            });
+        }
+
+        // --- Auto-load when admin section becomes visible ---
+        var adminLoaded = false;
+        var adminLink = document.querySelector('[data-section="admin"]');
+        if (adminLink) {
+            adminLink.addEventListener('click', function () {
+                loadMetrics();
+                loadUsers();
+                adminLoaded = true;
+            });
+        }
+    })();
+
     if (document.readyState === 'loading') {
         document.addEventListener('DOMContentLoaded', init);
     } else {

@@ -52,9 +52,9 @@
                 Ventas
                 <span class="sidebar__beta-badge">Beta</span>
             </a>
-            <a href="/admin" class="sidebar__link sidebar__link--admin" id="admin-link" style="display:none;">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>
-                Admin Panel
+            <a href="#" class="sidebar__link sidebar__link--admin" id="admin-link" data-section="admin" style="display:none;">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 15v2m-6 4h12a2 2 0 0 0 2-2v-6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v6a2 2 0 0 0 2 2zm10-10V7a4 4 0 0 0-8 0v4h8z"/></svg>
+                Admin
             </a>
         </nav>
 
@@ -541,6 +541,95 @@
                     </div>
                 </div>
                 <div class="ventas-list" id="ventas-list"></div>
+            </div>
+        </section>
+
+        <!-- ---- SECTION: Admin Panel ---- -->
+        <section class="section section--hidden" id="section-admin">
+            <h1 class="section__title">
+                Panel de Administración
+                <span class="admin-inline-badge">ADMIN</span>
+            </h1>
+            <p class="section__subtitle">Gestiona usuarios, suscripciones y conversaciones.</p>
+
+            <!-- Admin KPI cards -->
+            <div class="admin-kpi-row" id="admin-kpi-row">
+                <div class="admin-kpi">
+                    <span class="admin-kpi__val" id="admin-kpi-total">—</span>
+                    <span class="admin-kpi__label">Usuarios totales</span>
+                </div>
+                <div class="admin-kpi admin-kpi--green">
+                    <span class="admin-kpi__val" id="admin-kpi-active">—</span>
+                    <span class="admin-kpi__label">Suscripciones activas</span>
+                </div>
+                <div class="admin-kpi admin-kpi--red">
+                    <span class="admin-kpi__val" id="admin-kpi-expired">—</span>
+                    <span class="admin-kpi__label">Expiradas</span>
+                </div>
+                <div class="admin-kpi admin-kpi--blue">
+                    <span class="admin-kpi__val" id="admin-kpi-bots">—</span>
+                    <span class="admin-kpi__label">Bots activos</span>
+                </div>
+            </div>
+
+            <!-- Users table -->
+            <div class="admin-users-card">
+                <div class="admin-users-card__header">
+                    <h2>Usuarios registrados</h2>
+                    <button class="btn btn--sm btn--outline" id="btn-admin-refresh">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
+                        Actualizar
+                    </button>
+                </div>
+                <div class="admin-users-table-wrap">
+                    <table class="admin-users-table" id="admin-users-table">
+                        <thead>
+                            <tr>
+                                <th>Usuario</th>
+                                <th>Plan</th>
+                                <th>Estado</th>
+                                <th>Tiempo restante</th>
+                                <th>Bot</th>
+                                <th>Acciones</th>
+                            </tr>
+                        </thead>
+                        <tbody id="admin-users-tbody"></tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- User detail modal (conversations + gift) -->
+            <div class="admin-modal-overlay" id="admin-user-modal" style="display:none;">
+                <div class="admin-modal">
+                    <div class="admin-modal__header">
+                        <h2 id="admin-modal-title">Detalles del usuario</h2>
+                        <button class="admin-modal__close" id="admin-modal-close">&times;</button>
+                    </div>
+                    <div class="admin-modal__body">
+                        <!-- User info -->
+                        <div class="admin-modal__info" id="admin-modal-info"></div>
+
+                        <!-- Gift time -->
+                        <div class="admin-modal__gift">
+                            <h3>🎁 Regalar tiempo</h3>
+                            <div class="admin-gift-btns">
+                                <button class="btn btn--sm btn--outline admin-gift-btn" data-gift="1day">+1 Día</button>
+                                <button class="btn btn--sm btn--outline admin-gift-btn" data-gift="1week">+1 Semana</button>
+                                <button class="btn btn--sm btn--primary admin-gift-btn" data-gift="1month">+1 Mes</button>
+                            </div>
+                            <p class="admin-gift-result" id="admin-gift-result"></p>
+                        </div>
+
+                        <!-- Conversations -->
+                        <div class="admin-modal__convos">
+                            <h3>💬 Conversaciones (<span id="admin-convos-count">0</span>)</h3>
+                            <div class="admin-convos-loading" id="admin-convos-loading" style="display:none;">
+                                <div class="admin-convos-spinner"></div> Cargando...
+                            </div>
+                            <div class="admin-convos-list" id="admin-convos-list"></div>
+                        </div>
+                    </div>
+                </div>
             </div>
         </section>
     </main>

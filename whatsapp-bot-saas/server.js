@@ -1115,6 +1115,83 @@ app.post('/api/admin/users/:uid/kill-bot', authMiddleware, adminMiddleware, asyn
     res.json({ ok: true, message: 'Bot detenido.' });
 });
 
+// ─── Admin: Gift time to a user ──────────────────────────
+app.post('/api/admin/users/:uid/gift', authMiddleware, adminMiddleware, async (req, res) => {
+    const { uid } = req.params;
+    const { duration } = req.body; // '1day', '1week', '1month'
+
+    const durations = {
+        '1day': { ms: 24 * 60 * 60 * 1000, label: '1 día' },
+        '1week': { ms: 7 * 24 * 60 * 60 * 1000, label: '1 semana' },
+        '1month': { ms: 30 * 24 * 60 * 60 * 1000, label: '1 mes' }
+    };
+
+    const d = durations[duration];
+    if (!d) return res.status(400).json({ error: 'Duración inválida. Usa: 1day, 1week, 1month' });
+
+    try {
+        const existing = await loadUserConfig(uid);
+        const now = new Date();
+        const sub = existing.subscription || {};
+
+        // Start from current expiry if still active, otherwise from now
+        let startFrom = now;
+        if (sub.expiresAt) {
+            const existingExpiry = new Date(sub.expiresAt);
+            if (existingExpiry > now) startFrom = existingExpiry;
+        }
+
+        const newExpiry = new Date(startFrom.getTime() + d.ms);
+
+        await saveUserConfig(uid, {
+            subscription: {
+                active: true,
+                planId: sub.planId || 'gift',
+                planName: sub.planName || 'Regalo Admin',
+                paidAt: sub.paidAt || now.toISOString(),
+                expiresAt: newExpiry.toISOString(),
+                stripeSessionId: sub.stripeSessionId || 'gift_' + Date.now(),
+                stripeCustomerId: sub.stripeCustomerId || null,
+                totalMonths: sub.totalMonths || 0,
+                giftedBy: 'admin',
+                lastGiftAt: now.toISOString()
+            }
+        });
+
+        console.log(`[Admin] 🎁 Gifted ${d.label} to ${uid}, new expiry: ${newExpiry.toISOString()}`);
+        io.to(`user_${uid}`).emit('subscription_updated', { active: true, planId: sub.planId || 'gift', expiresAt: newExpiry.toISOString() });
+        res.json({ ok: true, message: `Se regaló ${d.label} de uso. Nueva expiración: ${newExpiry.toLocaleDateString('es-MX')}` });
+    } catch (err) {
+        console.error('[Admin] Gift error:', err.message);
+        res.status(500).json({ error: 'Error al regalar tiempo.' });
+    }
+});
+
+// ─── Admin: View user conversations ──────────────────────
+app.get('/api/admin/users/:uid/conversations', authMiddleware, adminMiddleware, async (req, res) => {
+    const { uid } = req.params;
+    try {
+        const msgs = await loadMessages(uid);
+        const convos = {};
+        msgs.forEach(m => {
+            const key = m.from;
+            if (!convos[key]) {
+                convos[key] = { phone: key, senderName: m.senderName || key, messages: [], lastMessage: null, lastTimestamp: null, unread: 0 };
+            }
+            convos[key].messages.push(m);
+            convos[key].lastMessage = m.body;
+            convos[key].lastTimestamp = m.timestamp;
+            convos[key].senderName = m.senderName || convos[key].senderName;
+            if (m.direction === 'incoming') convos[key].unread++;
+        });
+        const sorted = Object.values(convos).sort((a, b) => new Date(b.lastTimestamp) - new Date(a.lastTimestamp));
+        res.json({ ok: true, data: sorted, totalMessages: msgs.length });
+    } catch (err) {
+        console.error('[Admin] Conversations error:', err.message);
+        res.status(500).json({ error: 'Error obteniendo conversaciones.' });
+    }
+});
+
 // ─── SPA fallback ────────────────────────────────────────
 // Landing page at root
 app.get('/', (_req, res) => {
