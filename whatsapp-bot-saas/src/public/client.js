@@ -112,7 +112,11 @@
     }
 
     sidebarLinks.forEach(function(l) {
-        l.addEventListener('click', function(e) { e.preventDefault(); navigateTo(l.dataset.section); });
+        l.addEventListener('click', function(e) {
+            if (!l.dataset.section) return;   // let normal <a> navigation happen (e.g. /admin)
+            e.preventDefault();
+            navigateTo(l.dataset.section);
+        });
     });
     $$('[data-goto]').forEach(function(b) {
         b.addEventListener('click', function() { navigateTo(b.dataset.goto); });
