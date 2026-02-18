@@ -1,8 +1,9 @@
 FROM node:20-slim
 
-# Baileys needs no browser — just minimal dependencies
+# Baileys needs git for some sub-dependencies
 RUN apt-get update && apt-get install -y \
     ca-certificates \
+    git \
     --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
 
