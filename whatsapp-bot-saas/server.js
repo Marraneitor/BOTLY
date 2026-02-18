@@ -1,9 +1,9 @@
 /**
  * WhatsApp Bot SaaS — Multi-user Server
- * Express + Socket.io + whatsapp-web.js + Firebase Admin
+ * Express + Socket.io + Baileys (no Puppeteer!) + Firebase Admin
  *
  * Each authenticated user gets their own:
- *  - WhatsApp client instance (separate session/QR)
+ *  - WhatsApp Baileys socket (lightweight, ~20-30 MB per bot)
  *  - Configuration (saved per UID)
  *  - Socket.io room (events only reach their browser)
  */
@@ -18,6 +18,11 @@ const fs = require('fs');
 const admin = require('firebase-admin');
 const { getAIResponse } = require('./aiService');
 const Stripe = require('stripe');
+
+// ─── Baileys (lightweight WhatsApp library — no Chrome!) ─
+const { default: makeWASocket, useMultiFileAuthState, DisconnectReason, fetchLatestBaileysVersion, makeCacheableSignalKeyStore } = require('@whiskeysockets/baileys');
+const QRCode = require('qrcode');
+const pino = require('pino');
 
 // ─── Firebase Admin + Firestore ─────────────────────────
 let serviceAccount;
@@ -378,7 +383,7 @@ app.post('/api/bot/reset', authMiddleware, async (req, res) => {
     await stopBot(uid);
 
     // 2. Delete the local auth data for this user so a fresh QR is generated
-    const authDir = path.join(__dirname, '.wwebjs_auth', `session-${uid}`);
+    const authDir = path.join(__dirname, '.baileys_auth', uid);
     try {
         if (fs.existsSync(authDir)) {
             fs.rmSync(authDir, { recursive: true, force: true });
@@ -441,8 +446,8 @@ app.post('/api/messages/send', authMiddleware, async (req, res) => {
         return res.status(400).json({ error: 'El bot no está conectado.' });
     }
     try {
-        const chatId = phone.includes('@') ? phone : phone + '@c.us';
-        await bot.client.sendMessage(chatId, message);
+        const chatId = phone.includes('@') ? phone : phone + '@s.whatsapp.net';
+        await bot.sock.sendMessage(chatId, { text: message });
         const msgObj = {
             id: 'manual_' + Date.now(),
             from: phone.replace('@c.us', ''),
@@ -892,7 +897,7 @@ io.on('connection', async (socket) => {
         // Send current state
         const bot = userBots.get(uid);
         if (bot?.status === 'qr' && bot.lastQR) {
-            socket.emit('qr', bot.lastQR);
+            socket.emit('qr', bot.lastQR);   // Already a data URL from Baileys
         } else if (bot?.status === 'connected') {
             socket.emit('ready');
         }
@@ -906,7 +911,7 @@ io.on('connection', async (socket) => {
 });
 
 // ══════════════════════════════════════════════════════════
-//  WHATSAPP CLIENT LIFECYCLE (per user)
+//  WHATSAPP CLIENT LIFECYCLE (per user) — Baileys
 // ══════════════════════════════════════════════════════════
 
 // Message deduplication (shared)
@@ -918,182 +923,186 @@ function dedup(id) {
     return false;
 }
 
-function startBot(uid, email) {
-    const { Client, LocalAuth } = require('whatsapp-web.js');
+// Baileys logger (silent by default, set BAILEYS_DEBUG=true for verbose)
+const baileysLogger = pino({ level: process.env.BAILEYS_DEBUG ? 'debug' : 'silent' });
 
-    const botState = {
-        client: null,
-        status: 'starting',
-        lastQR: null,
-        stats: { messagesToday: 0, contactsCount: 0 }
-    };
-    userBots.set(uid, botState);
-
+async function startBot(uid, email) {
     const room = `user_${uid}`;
     console.log(`\n[Bot] Starting for ${email} (${uid})`);
 
-    const isDocker = !!process.env.PUPPETEER_EXECUTABLE_PATH;
-
-    const puppeteerOpts = {
-            headless: 'new',
-            args: [
-                '--no-sandbox',
-                '--disable-setuid-sandbox',
-                '--disable-dev-shm-usage',
-                '--disable-accelerated-2d-canvas',
-                '--no-first-run',
-                '--disable-gpu',
-                '--single-process',
-                '--no-zygote',
-                '--disable-features=HttpsUpgrades',
-                '--disable-extensions'
-            ]
-        };
-    // Use system Chromium in production (Docker)
-    if (isDocker) {
-        puppeteerOpts.executablePath = process.env.PUPPETEER_EXECUTABLE_PATH;
-        console.log(`[Bot] Using system Chromium: ${puppeteerOpts.executablePath}`);
-    }
-
-    const clientOpts = {
-        authStrategy: new LocalAuth({
-            clientId: uid,
-            dataPath: path.join(__dirname, '.wwebjs_auth')
-        }),
-        puppeteer: puppeteerOpts
+    const botState = {
+        sock: null,
+        status: 'starting',
+        lastQR: null,
+        stats: { messagesToday: 0, contactsCount: 0 },
+        retryCount: 0
     };
+    userBots.set(uid, botState);
 
-    // In Docker/production, use remote web version cache for compatibility
-    if (isDocker) {
-        clientOpts.webVersionCache = {
-            type: 'remote',
-            remotePath: 'https://raw.githubusercontent.com/niccolovnc/whatsapp-web.js/main/src/util/Constants.js'
-        };
-    }
+    // Auth state stored per user in .baileys_auth/<uid>/
+    const authDir = path.join(__dirname, '.baileys_auth', uid);
+    if (!fs.existsSync(authDir)) fs.mkdirSync(authDir, { recursive: true });
+    const { state, saveCreds } = await useMultiFileAuthState(authDir);
 
-    const client = new Client(clientOpts);
+    const { version } = await fetchLatestBaileysVersion();
+    console.log(`[Bot] Using Baileys WA version ${version.join('.')}`);
 
-    botState.client = client;
-
-    // QR
-    client.on('qr', (qr) => {
-        botState.status = 'qr';
-        botState.lastQR = qr;
-        console.log(`[Bot] QR generated for ${email}`);
-        io.to(room).emit('qr', qr);
+    const sock = makeWASocket({
+        version,
+        auth: {
+            creds: state.creds,
+            keys: makeCacheableSignalKeyStore(state.keys, baileysLogger)
+        },
+        logger: baileysLogger,
+        printQRInTerminal: false,
+        browser: ['Botly', 'Chrome', '120.0.0'],
+        generateHighQualityLinkPreview: false,
+        syncFullHistory: false,
+        markOnlineOnConnect: true
     });
 
-    // Ready
-    client.on('ready', async () => {
-        botState.status = 'connected';
-        botState.lastQR = null;
-        console.log(`[Bot] Connected for ${email} — ${client.info?.wid?.user}`);
-        io.to(room).emit('ready');
+    botState.sock = sock;
 
-        try {
-            const contacts = await client.getContacts();
-            botState.stats.contactsCount = contacts.length;
-            io.to(room).emit('stats', botState.stats);
-        } catch { /* ignore */ }
-    });
+    // Save credentials whenever they update
+    sock.ev.on('creds.update', saveCreds);
 
-    // Auth
-    client.on('authenticated', () => {
-        console.log(`[Bot] Authenticated for ${email}`);
-    });
+    // ─── Connection updates (QR, connected, disconnected) ───
+    sock.ev.on('connection.update', async (update) => {
+        const { connection, lastDisconnect, qr } = update;
 
-    client.on('auth_failure', (msg) => {
-        botState.status = 'off';
-        console.error(`[Bot] Auth failure for ${email}:`, msg);
-        io.to(room).emit('auth_error', msg);
-    });
-
-    // Loading screen (progress indicator)
-    client.on('loading_screen', (percent, message) => {
-        console.log(`[Bot] Loading for ${email}: ${percent}% — ${message}`);
-    });
-
-    // General error handler
-    client.on('change_state', (state) => {
-        console.log(`[Bot] State changed for ${email}: ${state}`);
-    });
-
-    // Disconnected
-    client.on('disconnected', (reason) => {
-        botState.status = 'off';
-        botState.lastQR = null;
-        console.log(`[Bot] Disconnected for ${email}: ${reason}`);
-        io.to(room).emit('disconnected', reason);
-        userBots.delete(uid);
-    });
-
-    // Messages
-    client.on('message', async (msg) => {
-        try {
-            const msgId = msg.id._serialized || msg.id.id;
-            if (dedup(msgId)) return;
-            if (msg.from.includes('@g.us')) return;
-            if (msg.from === 'status@broadcast' || msg.from.includes('@broadcast')) return;
-            if (msg.fromMe) return;
-            if (msg.type !== 'chat') return;
-            if (/^https?:\/\/\S+$/i.test(msg.body.trim())) return;
-
-            // Check subscription is still active (skip for admin)
-            const isAdmin = FREE_PASS_EMAILS.includes(email);
-            if (!isAdmin) {
-                const userConf = await loadUserConfig(uid);
-                const sub = userConf.subscription;
-                if (!sub || !sub.expiresAt || new Date(sub.expiresAt) <= new Date()) {
-                    console.log(`[Bot][${email}] ⛔ Subscription expired — ignoring message`);
-                    io.to(room).emit('subscription_expired', {
-                        reason: sub?.isTrial ? 'trial_expired' : 'expired'
-                    });
-                    return;
-                }
+        // QR code received — convert to base64 dataURL and send to client
+        if (qr) {
+            try {
+                const qrDataURL = await QRCode.toDataURL(qr, { width: 256, margin: 1 });
+                botState.status = 'qr';
+                botState.lastQR = qrDataURL;
+                console.log(`[Bot] QR generated for ${email}`);
+                io.to(room).emit('qr', qrDataURL);
+            } catch (err) {
+                console.error(`[Bot] QR generation error:`, err.message);
             }
+        }
 
-            const contact = await msg.getContact();
-            const senderName = contact.pushname || contact.name || msg.from;
-            const phone = msg.from.replace('@c.us', '');
-            console.log(`[Bot][${email}] 📩 ${senderName}: ${msg.body.substring(0, 80)}`);
+        if (connection === 'open') {
+            botState.status = 'connected';
+            botState.lastQR = null;
+            botState.retryCount = 0;
+            const phoneNumber = sock.user?.id?.split(':')[0] || sock.user?.id || 'unknown';
+            console.log(`[Bot] Connected for ${email} — ${phoneNumber}`);
+            io.to(room).emit('ready');
+        }
 
-            botState.stats.messagesToday++;
-            io.to(room).emit('stats', botState.stats);
+        if (connection === 'close') {
+            const statusCode = lastDisconnect?.error?.output?.statusCode;
+            const shouldReconnect = statusCode !== DisconnectReason.loggedOut;
 
-            // Save incoming message
-            const incomingMsg = {
-                id: msgId,
-                from: phone,
-                senderName: senderName,
-                body: msg.body,
-                direction: 'incoming',
-                timestamp: new Date().toISOString()
-            };
-            await saveMessage(uid, incomingMsg);
-            io.to(room).emit('new_message', incomingMsg);
+            console.log(`[Bot] Connection closed for ${email}: code=${statusCode}, reconnect=${shouldReconnect}`);
 
-            // Load this user's config and get AI response
-            const config = await loadUserConfig(uid);
-            const reply = await getAIResponse(uid, msg.from, msg.body, senderName, config);
-            await msg.reply(reply);
+            if (shouldReconnect && botState.retryCount < 5) {
+                botState.retryCount++;
+                console.log(`[Bot] Reconnecting for ${email} (attempt ${botState.retryCount})…`);
+                setTimeout(() => startBot(uid, email), 3000);
+            } else {
+                // Logged out or too many retries — clean up
+                botState.status = 'off';
+                botState.lastQR = null;
 
-            // Save bot reply
-            const outgoingMsg = {
-                id: msgId + '_reply',
-                from: phone,
-                senderName: senderName,
-                body: reply,
-                direction: 'outgoing',
-                timestamp: new Date().toISOString()
-            };
-            await saveMessage(uid, outgoingMsg);
-            io.to(room).emit('new_message', outgoingMsg);
-        } catch (error) {
-            console.error(`[Bot][${email}] Error:`, error.message);
+                if (statusCode === DisconnectReason.loggedOut) {
+                    // Clear auth so next start gets a fresh QR
+                    try {
+                        fs.rmSync(authDir, { recursive: true, force: true });
+                        console.log(`[Bot] Auth cleared for ${email} (logged out)`);
+                    } catch (e) { /* ignore */ }
+                }
+
+                console.log(`[Bot] Disconnected for ${email}: ${statusCode === DisconnectReason.loggedOut ? 'logged_out' : 'max_retries'}`);
+                io.to(room).emit('disconnected', statusCode === DisconnectReason.loggedOut ? 'logged_out' : 'connection_lost');
+                userBots.delete(uid);
+            }
         }
     });
 
-    client.initialize();
+    // ─── Incoming messages ──────────────────────────────────
+    sock.ev.on('messages.upsert', async ({ messages, type }) => {
+        if (type !== 'notify') return;
+
+        for (const msg of messages) {
+            try {
+                // Skip if not a text message
+                const text = msg.message?.conversation
+                    || msg.message?.extendedTextMessage?.text
+                    || null;
+                if (!text) continue;
+
+                // Skip own messages, group messages, status broadcasts
+                if (msg.key.fromMe) continue;
+                const jid = msg.key.remoteJid;
+                if (!jid || jid.endsWith('@g.us') || jid === 'status@broadcast') continue;
+
+                // Dedup
+                const msgId = msg.key.id;
+                if (dedup(msgId)) continue;
+
+                // Skip URLs-only messages
+                if (/^https?:\/\/\S+$/i.test(text.trim())) continue;
+
+                // Check subscription is still active (skip for admin)
+                const isAdmin = FREE_PASS_EMAILS.includes(email);
+                if (!isAdmin) {
+                    const userConf = await loadUserConfig(uid);
+                    const sub = userConf.subscription;
+                    if (!sub || !sub.expiresAt || new Date(sub.expiresAt) <= new Date()) {
+                        console.log(`[Bot][${email}] ⛔ Subscription expired — ignoring message`);
+                        io.to(room).emit('subscription_expired', {
+                            reason: sub?.isTrial ? 'trial_expired' : 'expired'
+                        });
+                        return;
+                    }
+                }
+
+                // Extract phone number and sender name
+                const phone = jid.replace('@s.whatsapp.net', '');
+                const senderName = msg.pushName || phone;
+                console.log(`[Bot][${email}] 📩 ${senderName}: ${text.substring(0, 80)}`);
+
+                botState.stats.messagesToday++;
+                io.to(room).emit('stats', botState.stats);
+
+                // Save incoming message
+                const incomingMsg = {
+                    id: msgId,
+                    from: phone,
+                    senderName: senderName,
+                    body: text,
+                    direction: 'incoming',
+                    timestamp: new Date().toISOString()
+                };
+                await saveMessage(uid, incomingMsg);
+                io.to(room).emit('new_message', incomingMsg);
+
+                // Load this user's config and get AI response
+                const config = await loadUserConfig(uid);
+                const reply = await getAIResponse(uid, jid, text, senderName, config);
+
+                // Send reply via Baileys
+                await sock.sendMessage(jid, { text: reply });
+
+                // Save bot reply
+                const outgoingMsg = {
+                    id: msgId + '_reply',
+                    from: phone,
+                    senderName: senderName,
+                    body: reply,
+                    direction: 'outgoing',
+                    timestamp: new Date().toISOString()
+                };
+                await saveMessage(uid, outgoingMsg);
+                io.to(room).emit('new_message', outgoingMsg);
+            } catch (error) {
+                console.error(`[Bot][${email}] Error:`, error.message);
+            }
+        }
+    });
 }
 
 async function stopBot(uid) {
@@ -1101,7 +1110,11 @@ async function stopBot(uid) {
     if (!bot) return;
 
     try {
-        if (bot.client) await bot.client.destroy();
+        if (bot.sock) {
+            bot.sock.ev.removeAllListeners();
+            // Just close the socket — do NOT logout() so session stays valid
+            bot.sock.end(undefined);
+        }
     } catch (e) {
         console.error(`[Bot] Error stopping:`, e.message);
     }

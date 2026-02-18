@@ -9,6 +9,7 @@ __pycache__/
 # WhatsApp session
 .wwebjs_auth/
 .wwebjs_cache/
+.baileys_auth/
 
 # Firebase credentials (NEVER commit)
 firebase-service-account.json

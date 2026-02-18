@@ -355,7 +355,17 @@
         qrPlaceholder.style.display = 'none';
         qrCanvas.classList.remove('qr-canvas--hidden');
         qrCanvas.innerHTML = '';
-        if (window.QRCode) {
+
+        // Baileys sends a base64 data URL (image), display directly
+        if (qrString.startsWith('data:image')) {
+            var img = document.createElement('img');
+            img.src = qrString;
+            img.width = 256;
+            img.height = 256;
+            img.style.borderRadius = '8px';
+            qrCanvas.appendChild(img);
+        } else if (window.QRCode) {
+            // Fallback for raw QR text strings
             new QRCode(qrCanvas, {
                 text: qrString,
                 width: 256,
