@@ -11,7 +11,7 @@
     var isPreview = window.location.protocol === 'file:';
 
     if (!token && !isPreview) {
-        window.location.href = './auth.html';
+        window.location.href = '/auth.html';
         return;
     }
 
@@ -151,7 +151,7 @@
                 if (res.status === 401) {
                     localStorage.removeItem('botsaas_token');
                     localStorage.removeItem('botsaas_user');
-                    window.location.href = './auth.html';
+                    window.location.href = '/auth.html';
                     return Promise.reject(new Error('AUTH_EXPIRED'));
                 }
                 var ct = res.headers.get('content-type') || '';
@@ -326,6 +326,12 @@
             }
         });
 
+        // Semi-auto: pending message alert
+        socket.on('pending_message', function(msg) {
+            pendingMessages.push(msg);
+            showPendingAlert(msg);
+        });
+
         socket.on('auth_error', function(msg) { showToast(msg || 'Error de autenticacion', 'error'); });
         socket.on('connect_error', function() { console.warn('[Socket] Error de conexion'); });
 
@@ -483,6 +489,24 @@
     var conversations = {}; // phone -> { phone, senderName, messages[], lastMessage, lastTimestamp }
     var currentChatPhone = null;
 
+    // --- Response Mode & Pause ---
+    var responseModeSwitch = $('#response-mode-switch');
+    var responseModeLabel  = $('#response-mode-label');
+    var responseModeLabelAlt = $('#response-mode-label-alt');
+    var pendingAlert       = $('#pending-alert');
+    var pendingAlertName   = $('#pending-alert-name');
+    var pendingAlertText   = $('#pending-alert-text');
+    var btnApproveReply    = $('#btn-approve-reply');
+    var btnManualReply     = $('#btn-manual-reply');
+    var btnDismissAlert    = $('#btn-dismiss-alert');
+    var btnPauseChat       = $('#btn-pause-chat');
+    var pauseBtnLabel      = $('#pause-btn-label');
+    var chatBotDot         = $('#chat-bot-dot');
+    var chatBotLabel       = $('#chat-bot-label');
+    var currentResponseMode = 'auto';
+    var pausedChats = [];
+    var pendingMessages = []; // queue of pending messages in semi-auto
+
     function formatTime(iso) {
         var d = new Date(iso);
         var now = new Date();
@@ -550,15 +574,18 @@
             var lastDir = c.messages.length > 0 ? c.messages[c.messages.length - 1].direction : '';
             var preview = (lastDir === 'outgoing' ? 'Bot: ' : '') + (c.lastMessage || '').substring(0, 60);
             var incoming = c.messages.filter(function(m) { return m.direction === 'incoming'; }).length;
+            var paused = isChatPaused(c.phone);
 
             var div = document.createElement('div');
-            div.className = 'inbox-item';
+            div.className = 'inbox-item' + (paused ? ' inbox-item--paused' : '');
             div.dataset.phone = c.phone;
             div.innerHTML =
                 '<div class="inbox-item__avatar">' + getInitials(c.senderName) + '</div>' +
                 '<div class="inbox-item__body">' +
                     '<div class="inbox-item__top">' +
-                        '<span class="inbox-item__name">' + escapeHtml(c.senderName) + '</span>' +
+                        '<span class="inbox-item__name">' + escapeHtml(c.senderName) +
+                            (paused ? ' <span class="inbox-item__paused-badge">⏸</span>' : '') +
+                        '</span>' +
                         '<span class="inbox-item__time">' + formatTime(c.lastTimestamp) + '</span>' +
                     '</div>' +
                     '<div class="inbox-item__bottom">' +
@@ -598,6 +625,9 @@
         // Fill header
         if (chatContactName) chatContactName.textContent = convo.senderName;
         if (chatContactPhone) chatContactPhone.textContent = '+' + phone;
+
+        // Update pause button state
+        updatePauseUI(phone);
 
         // Switch views
         if (inboxView) inboxView.style.display = 'none';
@@ -711,6 +741,168 @@
                 showToast('Historial borrado');
             }).catch(function(err) {
                 showToast(err.message || 'Error al borrar', 'error');
+            });
+        });
+    }
+
+    // ═══════════════════════════════════════════════════
+    //  RESPONSE MODE (auto / semiauto)
+    // ═══════════════════════════════════════════════════
+
+    function loadResponseMode() {
+        apiCall('/config/response-mode').then(function(res) {
+            currentResponseMode = res.mode || 'auto';
+            updateModeUI();
+        }).catch(function() {});
+    }
+
+    function updateModeUI() {
+        if (!responseModeSwitch) return;
+        responseModeSwitch.checked = (currentResponseMode === 'semiauto');
+        if (responseModeLabel) {
+            responseModeLabel.style.opacity = currentResponseMode === 'auto' ? '1' : '.45';
+            responseModeLabel.style.fontWeight = currentResponseMode === 'auto' ? '600' : '400';
+        }
+        if (responseModeLabelAlt) {
+            responseModeLabelAlt.style.opacity = currentResponseMode === 'semiauto' ? '1' : '.45';
+            responseModeLabelAlt.style.fontWeight = currentResponseMode === 'semiauto' ? '600' : '400';
+        }
+    }
+
+    if (responseModeSwitch) {
+        responseModeSwitch.addEventListener('change', function() {
+            var newMode = responseModeSwitch.checked ? 'semiauto' : 'auto';
+            apiCall('/config/response-mode', {
+                method: 'POST',
+                body: JSON.stringify({ mode: newMode })
+            }).then(function(res) {
+                currentResponseMode = res.mode || newMode;
+                updateModeUI();
+                showToast(currentResponseMode === 'auto' ? 'Modo automático activado' : 'Modo semi-automático activado');
+            }).catch(function(err) {
+                // Revert
+                responseModeSwitch.checked = !responseModeSwitch.checked;
+                showToast(err.message || 'Error al cambiar modo', 'error');
+            });
+        });
+    }
+
+    // ═══════════════════════════════════════════════════
+    //  PENDING MESSAGE ALERT (semi-auto)
+    // ═══════════════════════════════════════════════════
+
+    function showPendingAlert(msg) {
+        if (!pendingAlert) return;
+        pendingAlert.classList.remove('pending-alert--hidden');
+        if (pendingAlertName) pendingAlertName.textContent = msg.senderName || msg.phone;
+        if (pendingAlertText) pendingAlertText.textContent = (msg.body || '').substring(0, 100);
+        pendingAlert.dataset.phone = msg.phone;
+        pendingAlert.dataset.msgId = msg.msgId || '';
+        // Play notification sound (subtle beep)
+        try { new Audio('data:audio/wav;base64,UklGRl9vT19teleXhWYXYFBIEAABAAEARKwAAIhYA' +
+            'QACABAAZGFAwAAAA==').play().catch(function(){}); } catch(e) {}
+    }
+
+    function hidePendingAlert() {
+        if (!pendingAlert) return;
+        pendingAlert.classList.add('pending-alert--hidden');
+        // Show next pending if any
+        pendingMessages.shift();
+        if (pendingMessages.length > 0) {
+            setTimeout(function() { showPendingAlert(pendingMessages[0]); }, 300);
+        }
+    }
+
+    if (btnApproveReply) {
+        btnApproveReply.addEventListener('click', function() {
+            var phone = pendingAlert.dataset.phone;
+            var msgId = pendingAlert.dataset.msgId;
+            if (!phone) return;
+            btnApproveReply.disabled = true;
+            btnApproveReply.textContent = 'Enviando...';
+            apiCall('/bot/approve-reply', {
+                method: 'POST',
+                body: JSON.stringify({ phone: phone, msgId: msgId })
+            }).then(function() {
+                showToast('Respuesta enviada con bot');
+                hidePendingAlert();
+            }).catch(function(err) {
+                showToast(err.message || 'Error al responder', 'error');
+            }).finally(function() {
+                btnApproveReply.disabled = false;
+                btnApproveReply.innerHTML =
+                    '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14">' +
+                    '<path d="M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20z"/><path d="M12 8v4l3 3"/></svg> Responder con Bot';
+            });
+        });
+    }
+
+    if (btnManualReply) {
+        btnManualReply.addEventListener('click', function() {
+            var phone = pendingAlert.dataset.phone;
+            if (!phone) return;
+            hidePendingAlert();
+            openChat(phone);
+            if (chatInput) chatInput.focus();
+        });
+    }
+
+    if (btnDismissAlert) {
+        btnDismissAlert.addEventListener('click', function() {
+            hidePendingAlert();
+        });
+    }
+
+    // ═══════════════════════════════════════════════════
+    //  PER-CHAT PAUSE / RESUME
+    // ═══════════════════════════════════════════════════
+
+    function loadPausedChats() {
+        apiCall('/bot/paused-chats').then(function(res) {
+            pausedChats = res.pausedChats || [];
+        }).catch(function() {});
+    }
+
+    function isChatPaused(phone) {
+        return pausedChats.indexOf(phone) !== -1;
+    }
+
+    function updatePauseUI(phone) {
+        var paused = isChatPaused(phone);
+        if (chatBotDot) chatBotDot.className = paused ? 'status-dot status-dot--off' : 'status-dot status-dot--on';
+        if (chatBotLabel) chatBotLabel.textContent = paused ? 'Bot pausado' : 'Bot activo';
+        if (btnPauseChat) {
+            btnPauseChat.className = paused
+                ? 'btn btn--primary btn--sm chat-pause-btn chat-pause-btn--paused'
+                : 'btn btn--ghost btn--sm chat-pause-btn';
+            btnPauseChat.title = paused ? 'Reanudar bot en este chat' : 'Pausar bot en este chat';
+        }
+        if (pauseBtnLabel) pauseBtnLabel.textContent = paused ? 'Reanudar' : 'Pausar';
+        // Update pause icon
+        if (btnPauseChat) {
+            var svg = btnPauseChat.querySelector('svg');
+            if (svg) {
+                svg.innerHTML = paused
+                    ? '<polygon points="5 3 19 12 5 21 5 3"/>'
+                    : '<rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/>';
+            }
+        }
+    }
+
+    if (btnPauseChat) {
+        btnPauseChat.addEventListener('click', function() {
+            if (!currentChatPhone) return;
+            var paused = isChatPaused(currentChatPhone);
+            var endpoint = paused ? '/bot/resume-chat' : '/bot/pause-chat';
+            apiCall(endpoint, {
+                method: 'POST',
+                body: JSON.stringify({ phone: currentChatPhone })
+            }).then(function(res) {
+                pausedChats = res.pausedChats || [];
+                updatePauseUI(currentChatPhone);
+                showToast(isChatPaused(currentChatPhone) ? 'Bot pausado en este chat' : 'Bot reanudado en este chat');
+            }).catch(function(err) {
+                showToast(err.message || 'Error', 'error');
             });
         });
     }
@@ -929,13 +1121,13 @@
                 };
                 if (!firebase.apps.length) firebase.initializeApp(fbConfig);
                 firebase.auth().signOut().then(function() {
-                    window.location.href = './auth.html';
+                    window.location.href = '/';
                 }).catch(function() {
-                    window.location.href = './auth.html';
+                    window.location.href = '/';
                 });
             } catch (e) {
                 console.warn('Firebase signOut error:', e);
-                window.location.href = './auth.html';
+                window.location.href = '/';
             }
         });
     }
@@ -970,6 +1162,10 @@
 
         // Load messages history
         loadMessagesFromAPI();
+
+        // Load response mode & paused chats
+        loadResponseMode();
+        loadPausedChats();
 
         // Load subscription status
         loadSubscription();

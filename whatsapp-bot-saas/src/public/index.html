@@ -268,10 +268,43 @@
                 <div class="inbox-header">
                     <h1 class="section__title">Conversaciones</h1>
                     <div class="inbox-header__actions">
+                        <!-- Response mode toggle -->
+                        <div class="response-mode-toggle" id="response-mode-toggle">
+                            <span class="response-mode-label" id="response-mode-label">Automático</span>
+                            <label class="toggle">
+                                <input type="checkbox" id="response-mode-switch">
+                                <span class="toggle__slider"></span>
+                            </label>
+                            <span class="response-mode-label response-mode-label--alt" id="response-mode-label-alt">Semi-auto</span>
+                        </div>
                         <input class="form__input inbox-search" type="text" id="inbox-search" placeholder="Buscar contacto...">
                         <button class="btn btn--danger btn--sm" id="btn-clear-messages">
                             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
                             Borrar todo
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Pending message alert (semi-auto mode) -->
+                <div class="pending-alert pending-alert--hidden" id="pending-alert">
+                    <div class="pending-alert__icon">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
+                    </div>
+                    <div class="pending-alert__body">
+                        <strong id="pending-alert-name">Contacto</strong>
+                        <p id="pending-alert-text">Mensaje pendiente...</p>
+                    </div>
+                    <div class="pending-alert__actions">
+                        <button class="btn btn--primary btn--sm" id="btn-approve-reply">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14"><path d="M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20z"/><path d="M12 8v4l3 3"/></svg>
+                            Responder con Bot
+                        </button>
+                        <button class="btn btn--outline btn--sm" id="btn-manual-reply">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+                            Responder manual
+                        </button>
+                        <button class="btn btn--ghost btn--sm" id="btn-dismiss-alert">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
                         </button>
                     </div>
                 </div>
@@ -296,6 +329,10 @@
                         <span class="chat-topbar__phone" id="chat-contact-phone">+00 000 000 0000</span>
                     </div>
                     <div class="chat-topbar__status">
+                        <button class="btn btn--ghost btn--sm chat-pause-btn" id="btn-pause-chat" title="Pausar bot en este chat">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16"><rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/></svg>
+                            <span id="pause-btn-label">Pausar</span>
+                        </button>
                         <span class="status-dot status-dot--on" id="chat-bot-dot"></span>
                         <span id="chat-bot-label">Bot activo</span>
                     </div>

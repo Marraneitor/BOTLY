@@ -31,7 +31,7 @@
                 email: user.email,
                 photo: user.photoURL || ''
             }));
-            window.location.href = './index.html';
+            window.location.href = '/dashboard';
         }
     });
 
@@ -212,5 +212,11 @@
 
     document.getElementById('btn-google-login').addEventListener('click', signInWithGoogle);
     document.getElementById('btn-google-register').addEventListener('click', signInWithGoogle);
+
+    // ─── Auto-switch to register if hash is #register ────────
+    if (window.location.hash === '#register' || window.location.hash === '#registro') {
+        loginCard.classList.add('auth-card--hidden');
+        registerCard.classList.remove('auth-card--hidden');
+    }
 
 })();

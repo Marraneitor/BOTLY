@@ -10,10 +10,18 @@
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
 </head>
 <body class="auth-body">
+    <!-- Back to landing -->
+    <a href="/" class="auth-back">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16"><polyline points="15 18 9 12 15 6"/></svg>
+        Volver al inicio
+    </a>
+
     <div class="auth-container">
         <!-- Branding -->
         <div class="auth-brand">
-            <img class="auth-brand__logo" src="./images/logo.png" alt="Botly">
+            <a href="/" style="text-decoration:none">
+                <img class="auth-brand__logo" src="./images/logo.png" alt="Botly">
+            </a>
             <h1 class="auth-brand__name">Botly</h1>
             <p class="auth-brand__tagline">Tu asistente de WhatsApp inteligente</p>
         </div>
@@ -148,6 +156,15 @@
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
                 <span>Datos seguros</span>
             </div>
+        </div>
+
+        <!-- Landing page promo -->
+        <div class="auth-promo">
+            <p>¿Quieres conocer más sobre Botly?</p>
+            <a href="/" class="auth-promo__link">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+                Ver Landing Page
+            </a>
         </div>
     </div>
 

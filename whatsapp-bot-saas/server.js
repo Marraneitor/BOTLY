@@ -472,6 +472,95 @@ app.delete('/api/messages', authMiddleware, async (req, res) => {
 });
 
 // ══════════════════════════════════════════════════════════
+//  RESPONSE MODE & PER-CHAT PAUSE ROUTES
+// ══════════════════════════════════════════════════════════
+
+// Set response mode: 'auto' or 'semiauto'
+app.post('/api/config/response-mode', authMiddleware, async (req, res) => {
+    const { mode } = req.body;
+    if (!['auto', 'semiauto'].includes(mode)) {
+        return res.status(400).json({ error: 'Modo inválido. Usa "auto" o "semiauto".' });
+    }
+    await saveUserConfig(req.uid, { responseMode: mode });
+    console.log(`[Config] Response mode set to '${mode}' for ${req.email}`);
+    res.json({ ok: true, mode });
+});
+
+// Get response mode
+app.get('/api/config/response-mode', authMiddleware, async (req, res) => {
+    const config = await loadUserConfig(req.uid);
+    res.json({ ok: true, mode: config.responseMode || 'auto' });
+});
+
+// Pause bot for a specific chat
+app.post('/api/bot/pause-chat', authMiddleware, async (req, res) => {
+    const { phone } = req.body;
+    if (!phone) return res.status(400).json({ error: 'Se requiere phone.' });
+    const config = await loadUserConfig(req.uid);
+    const paused = config.pausedChats || [];
+    if (!paused.includes(phone)) paused.push(phone);
+    await saveUserConfig(req.uid, { pausedChats: paused });
+    console.log(`[Bot][${req.email}] ⏸ Paused chat: ${phone}`);
+    res.json({ ok: true, pausedChats: paused });
+});
+
+// Resume bot for a specific chat
+app.post('/api/bot/resume-chat', authMiddleware, async (req, res) => {
+    const { phone } = req.body;
+    if (!phone) return res.status(400).json({ error: 'Se requiere phone.' });
+    const config = await loadUserConfig(req.uid);
+    const paused = (config.pausedChats || []).filter(p => p !== phone);
+    await saveUserConfig(req.uid, { pausedChats: paused });
+    console.log(`[Bot][${req.email}] ▶ Resumed chat: ${phone}`);
+    res.json({ ok: true, pausedChats: paused });
+});
+
+// Get paused chats
+app.get('/api/bot/paused-chats', authMiddleware, async (req, res) => {
+    const config = await loadUserConfig(req.uid);
+    res.json({ ok: true, pausedChats: config.pausedChats || [] });
+});
+
+// Approve AI reply for semi-auto mode
+app.post('/api/bot/approve-reply', authMiddleware, async (req, res) => {
+    const { phone, msgId } = req.body;
+    if (!phone) return res.status(400).json({ error: 'Se requiere phone.' });
+    const bot = userBots.get(req.uid);
+    if (!bot || bot.status !== 'connected') {
+        return res.status(400).json({ error: 'El bot no está conectado.' });
+    }
+    try {
+        const jid = phone.includes('@') ? phone : phone + '@s.whatsapp.net';
+        const config = await loadUserConfig(req.uid);
+        // Find the pending message to get context
+        const msgs = await loadMessages(req.uid);
+        const pendingIncoming = msgs.filter(m => m.from === phone && m.direction === 'incoming');
+        const lastIncoming = pendingIncoming[pendingIncoming.length - 1];
+        const text = lastIncoming ? lastIncoming.body : '';
+        const senderName = lastIncoming ? lastIncoming.senderName : phone;
+
+        const reply = await getAIResponse(req.uid, jid, text, senderName, config);
+        await bot.sock.sendMessage(jid, { text: reply });
+
+        const outgoingMsg = {
+            id: (msgId || 'approve_' + Date.now()) + '_reply',
+            from: phone,
+            senderName: senderName,
+            body: reply,
+            direction: 'outgoing',
+            timestamp: new Date().toISOString()
+        };
+        await saveMessage(req.uid, outgoingMsg);
+        io.to(`user_${req.uid}`).emit('new_message', outgoingMsg);
+        console.log(`[Bot][${req.email}] ✅ Approved AI reply to ${phone}`);
+        res.json({ ok: true, data: outgoingMsg });
+    } catch (e) {
+        console.error(`[Bot] Approve reply error:`, e.message);
+        res.status(500).json({ error: 'Error al enviar respuesta: ' + e.message });
+    }
+});
+
+// ══════════════════════════════════════════════════════════
 //  STRIPE / SUBSCRIPTION ROUTES
 // ══════════════════════════════════════════════════════════
 
@@ -863,6 +952,17 @@ app.post('/api/admin/users/:uid/kill-bot', authMiddleware, adminMiddleware, asyn
 });
 
 // ─── SPA fallback ────────────────────────────────────────
+// Landing page at root
+app.get('/', (_req, res) => {
+    res.sendFile(path.join(__dirname, 'src', 'public', 'landing.html'));
+});
+app.get('/landing', (_req, res) => {
+    res.sendFile(path.join(__dirname, 'src', 'public', 'landing.html'));
+});
+// Dashboard (protected by client-side auth)
+app.get('/dashboard', (_req, res) => {
+    res.sendFile(path.join(__dirname, 'src', 'public', 'index.html'));
+});
 app.get('/auth.html', (_req, res) => {
     res.sendFile(path.join(__dirname, 'src', 'public', 'auth.html'));
 });
@@ -872,8 +972,15 @@ app.get('/admin', (_req, res) => {
 app.get('/admin.html', (_req, res) => {
     res.sendFile(path.join(__dirname, 'src', 'public', 'admin.html'));
 });
-app.get(/^\/(?!api|socket\.io|admin).*/, (_req, res) => {
-    res.sendFile(path.join(__dirname, 'src', 'public', 'index.html'));
+app.get('/terms.html', (_req, res) => {
+    res.sendFile(path.join(__dirname, 'src', 'public', 'terms.html'));
+});
+app.get('/privacy.html', (_req, res) => {
+    res.sendFile(path.join(__dirname, 'src', 'public', 'privacy.html'));
+});
+// SPA catch-all — unknown routes go to landing page
+app.get(/^\/(?!api|socket\.io|admin|landing|terms|privacy).*/, (_req, res) => {
+    res.sendFile(path.join(__dirname, 'src', 'public', 'landing.html'));
 });
 
 // ══════════════════════════════════════════════════════════
@@ -1097,8 +1204,33 @@ async function startBot(uid, email) {
                 await saveMessage(uid, incomingMsg);
                 io.to(room).emit('new_message', incomingMsg);
 
-                // Load this user's config and get AI response
+                // Load this user's config
                 const config = await loadUserConfig(uid);
+
+                // Check if this chat is paused
+                const pausedChats = config.pausedChats || [];
+                if (pausedChats.includes(phone)) {
+                    console.log(`[Bot][${email}] ⏸ Chat paused for ${phone} — skipping auto-reply`);
+                    continue;
+                }
+
+                // Check response mode
+                const responseMode = config.responseMode || 'auto';
+
+                if (responseMode === 'semiauto') {
+                    // Semi-auto: emit pending message alert, don't auto-reply
+                    console.log(`[Bot][${email}] 🔔 Semi-auto: pending reply for ${phone}`);
+                    io.to(room).emit('pending_message', {
+                        phone: phone,
+                        senderName: senderName,
+                        body: text,
+                        msgId: msgId,
+                        timestamp: new Date().toISOString()
+                    });
+                    continue;
+                }
+
+                // Auto mode: get AI response and send
                 const reply = await getAIResponse(uid, jid, text, senderName, config);
 
                 // Send reply via Baileys
