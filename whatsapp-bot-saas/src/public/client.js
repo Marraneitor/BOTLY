@@ -356,21 +356,23 @@
         qrCanvas.classList.remove('qr-canvas--hidden');
         qrCanvas.innerHTML = '';
 
-        // Baileys sends a base64 data URL (image), display directly
-        if (qrString.startsWith('data:image')) {
+        // Baileys sends a base64 data URL (image), display directly as <img>
+        if (qrString && qrString.indexOf('data:image') === 0) {
             var img = document.createElement('img');
             img.src = qrString;
-            img.width = 256;
-            img.height = 256;
+            img.style.width = '100%';
+            img.style.height = '100%';
+            img.style.objectFit = 'contain';
             img.style.borderRadius = '8px';
+            img.style.background = '#ffffff';
             qrCanvas.appendChild(img);
-        } else if (window.QRCode) {
-            // Fallback for raw QR text strings
+        } else if (qrString && window.QRCode) {
+            // Fallback for raw QR text strings (legacy)
             new QRCode(qrCanvas, {
                 text: qrString,
-                width: 256,
-                height: 256,
-                colorDark: '#0f172a',
+                width: 300,
+                height: 300,
+                colorDark: '#000000',
                 colorLight: '#ffffff',
                 correctLevel: QRCode.CorrectLevel.M
             });

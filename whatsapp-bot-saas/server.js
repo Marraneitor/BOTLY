@@ -973,10 +973,15 @@ async function startBot(uid, email) {
         // QR code received — convert to base64 dataURL and send to client
         if (qr) {
             try {
-                const qrDataURL = await QRCode.toDataURL(qr, { width: 256, margin: 1 });
+                const qrDataURL = await QRCode.toDataURL(qr, {
+                    width: 400,
+                    margin: 2,
+                    color: { dark: '#000000', light: '#FFFFFF' },
+                    errorCorrectionLevel: 'M'
+                });
                 botState.status = 'qr';
                 botState.lastQR = qrDataURL;
-                console.log(`[Bot] QR generated for ${email}`);
+                console.log(`[Bot] QR generated for ${email} (${qrDataURL.length} bytes)`);
                 io.to(room).emit('qr', qrDataURL);
             } catch (err) {
                 console.error(`[Bot] QR generation error:`, err.message);
