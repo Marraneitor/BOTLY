@@ -151,7 +151,7 @@ function getModel(apiKey, systemPrompt) {
     }
 
     return genAI.getGenerativeModel({
-        model: 'gemini-2.0-flash',
+        model: 'gemini-1.5-flash-8b',
         systemInstruction: systemPrompt,
         generationConfig: {
             temperature: 0.7,
