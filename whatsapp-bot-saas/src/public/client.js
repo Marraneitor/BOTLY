@@ -556,6 +556,11 @@
         if (!inboxList) return;
         inboxList.innerHTML = '';
         var convos = getSortedConversations();
+
+        // Update count badge
+        var inboxCount = $('#inbox-count');
+        if (inboxCount) inboxCount.textContent = convos.length + (convos.length === 1 ? ' chat' : ' chats');
+
         if (filter) {
             var q = filter.toLowerCase();
             convos = convos.filter(function(c) {
@@ -1172,6 +1177,288 @@
 
         // Check payment result from URL
         checkPaymentResult();
+
+        // Load message filters & scheduled messages
+        loadMessageFilters();
+        loadScheduledMessages();
+        loadGroupsForSelectors();
+    }
+
+    // ═══════════════════════════════════════════════════
+    //  MESSAGE TABS NAVIGATION
+    // ═══════════════════════════════════════════════════
+    (function initMsgTabs() {
+        var tabs = document.querySelectorAll('.msg-tab');
+        tabs.forEach(function(tab) {
+            tab.addEventListener('click', function() {
+                var target = tab.dataset.msgTab;
+                tabs.forEach(function(t) { t.classList.remove('msg-tab--active'); });
+                tab.classList.add('msg-tab--active');
+                document.querySelectorAll('.msg-tab-content').forEach(function(c) {
+                    c.classList.remove('msg-tab-content--active');
+                });
+                var panel = document.getElementById('msg-tab-' + target);
+                if (panel) panel.classList.add('msg-tab-content--active');
+            });
+        });
+    })();
+
+    // ═══════════════════════════════════════════════════
+    //  MESSAGE RESPONSE FILTERS
+    // ═══════════════════════════════════════════════════
+    var filterSavedContacts   = $('#filter-saved-contacts');
+    var filterUnsavedContacts = $('#filter-unsaved-contacts');
+    var filterGroups          = $('#filter-groups');
+    var groupSelectorPanel    = $('#group-selector');
+    var groupList             = $('#group-list');
+    var btnSaveFilters        = $('#btn-save-filters');
+    var selectedGroups        = [];
+
+    function loadMessageFilters() {
+        apiCall('/config/message-filters').then(function(res) {
+            if (!res.ok) return;
+            var f = res.data || {};
+            if (filterSavedContacts)   filterSavedContacts.checked   = f.replySavedContacts !== false;
+            if (filterUnsavedContacts) filterUnsavedContacts.checked = f.replyUnsavedContacts !== false;
+            if (filterGroups)          filterGroups.checked          = !!f.replyGroups;
+            selectedGroups = f.selectedGroups || [];
+            toggleGroupSelector();
+            renderGroupSelections();
+        }).catch(function() {});
+    }
+
+    function toggleGroupSelector() {
+        if (!groupSelectorPanel) return;
+        groupSelectorPanel.style.display = (filterGroups && filterGroups.checked) ? 'block' : 'none';
+    }
+
+    if (filterGroups) {
+        filterGroups.addEventListener('change', toggleGroupSelector);
+    }
+
+    function renderGroupSelections() {
+        if (!groupList) return;
+        var items = groupList.querySelectorAll('.group-selector__item');
+        items.forEach(function(item) {
+            var gid = item.dataset.groupId;
+            if (selectedGroups.indexOf(gid) !== -1) {
+                item.classList.add('group-selector__item--selected');
+            } else {
+                item.classList.remove('group-selector__item--selected');
+            }
+        });
+    }
+
+    function loadGroupsForSelectors() {
+        apiCall('/bot/groups').then(function(res) {
+            if (!res.ok || !res.data) return;
+            var groups = res.data;
+            renderGroupList(groups);
+            renderScheduleGroupOptions(groups);
+        }).catch(function() {});
+    }
+
+    function renderGroupList(groups) {
+        if (!groupList) return;
+        if (groups.length === 0) {
+            groupList.innerHTML =
+                '<div class="group-selector__empty">' +
+                    '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" width="32" height="32"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>' +
+                    '<p>No se encontraron grupos. Asegúrate de que el bot esté conectado.</p>' +
+                '</div>';
+            return;
+        }
+        groupList.innerHTML = '';
+        groups.forEach(function(g) {
+            var initials = (g.name || '??').split(' ').map(function(w) { return w[0]; }).join('').toUpperCase().slice(0, 2);
+            var selected = selectedGroups.indexOf(g.id) !== -1;
+            var div = document.createElement('div');
+            div.className = 'group-selector__item' + (selected ? ' group-selector__item--selected' : '');
+            div.dataset.groupId = g.id;
+            div.innerHTML =
+                '<div class="group-selector__item-icon">' + escapeHtml(initials) + '</div>' +
+                '<span class="group-selector__item-name">' + escapeHtml(g.name) + '</span>' +
+                '<div class="group-selector__item-check"></div>';
+            div.addEventListener('click', function() {
+                var idx = selectedGroups.indexOf(g.id);
+                if (idx !== -1) {
+                    selectedGroups.splice(idx, 1);
+                    div.classList.remove('group-selector__item--selected');
+                } else {
+                    selectedGroups.push(g.id);
+                    div.classList.add('group-selector__item--selected');
+                }
+            });
+            groupList.appendChild(div);
+        });
+    }
+
+    if (btnSaveFilters) {
+        btnSaveFilters.addEventListener('click', function() {
+            var data = {
+                replySavedContacts:   filterSavedContacts   ? filterSavedContacts.checked   : true,
+                replyUnsavedContacts: filterUnsavedContacts ? filterUnsavedContacts.checked : true,
+                replyGroups:          filterGroups          ? filterGroups.checked          : false,
+                selectedGroups:       selectedGroups
+            };
+            btnSaveFilters.disabled = true;
+            btnSaveFilters.innerHTML = '<span class="spinner"></span> Guardando...';
+            apiCall('/config/message-filters', {
+                method: 'POST',
+                body: JSON.stringify(data)
+            }).then(function() {
+                showToast('Filtros guardados correctamente');
+            }).catch(function(err) {
+                showToast(err.message || 'Error al guardar filtros', 'error');
+            }).finally(function() {
+                btnSaveFilters.disabled = false;
+                btnSaveFilters.innerHTML =
+                    '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>' +
+                    ' Guardar filtros';
+            });
+        });
+    }
+
+    // ═══════════════════════════════════════════════════
+    //  SCHEDULED / RECURRING MESSAGES
+    // ═══════════════════════════════════════════════════
+    var schedGroupSelect  = $('#sched-group-select');
+    var schedIntervalVal  = $('#sched-interval-value');
+    var schedIntervalUnit = $('#sched-interval-unit');
+    var schedMessage      = $('#sched-message');
+    var btnAddScheduled   = $('#btn-add-scheduled');
+    var scheduledList     = $('#scheduled-list');
+    var scheduledEmpty    = $('#scheduled-empty');
+    var scheduledItems    = [];
+
+    function renderScheduleGroupOptions(groups) {
+        if (!schedGroupSelect) return;
+        // Keep the default option
+        schedGroupSelect.innerHTML = '<option value="">— Selecciona un grupo —</option>';
+        groups.forEach(function(g) {
+            var opt = document.createElement('option');
+            opt.value = g.id;
+            opt.textContent = g.name;
+            schedGroupSelect.appendChild(opt);
+        });
+    }
+
+    function loadScheduledMessages() {
+        apiCall('/config/scheduled-messages').then(function(res) {
+            if (!res.ok) return;
+            scheduledItems = res.data || [];
+            renderScheduledList();
+        }).catch(function() {});
+    }
+
+    function renderScheduledList() {
+        if (!scheduledList) return;
+
+        // Remove old items (keep the empty placeholder)
+        var oldItems = scheduledList.querySelectorAll('.scheduled-item');
+        oldItems.forEach(function(el) { el.remove(); });
+
+        if (scheduledItems.length === 0) {
+            if (scheduledEmpty) scheduledEmpty.style.display = 'flex';
+            return;
+        }
+        if (scheduledEmpty) scheduledEmpty.style.display = 'none';
+
+        var unitLabels = { minutes: 'min', hours: 'hrs', days: 'días' };
+
+        scheduledItems.forEach(function(item, idx) {
+            var div = document.createElement('div');
+            div.className = 'scheduled-item';
+            div.innerHTML =
+                '<div class="scheduled-item__icon">🔄</div>' +
+                '<div class="scheduled-item__body">' +
+                    '<div class="scheduled-item__top">' +
+                        '<span class="scheduled-item__group">' + escapeHtml(item.groupName || item.groupId) + '</span>' +
+                        '<span class="scheduled-item__interval">Cada ' + item.intervalValue + ' ' + (unitLabels[item.intervalUnit] || item.intervalUnit) + '</span>' +
+                    '</div>' +
+                    '<p class="scheduled-item__message">' + escapeHtml(item.message) + '</p>' +
+                    '<span class="scheduled-item__meta">' +
+                        (item.enabled ? '✅ Activo' : '⏸ Pausado') +
+                        (item.lastSent ? ' · Último envío: ' + formatTime(item.lastSent) : ' · Aún no enviado') +
+                    '</span>' +
+                '</div>' +
+                '<div class="scheduled-item__actions">' +
+                    '<label class="toggle scheduled-item__toggle">' +
+                        '<input type="checkbox" data-sched-idx="' + idx + '" class="sched-toggle" ' + (item.enabled ? 'checked' : '') + '>' +
+                        '<span class="toggle__slider"></span>' +
+                    '</label>' +
+                    '<button class="btn btn--ghost btn--sm scheduled-item__delete" data-sched-idx="' + idx + '">Eliminar</button>' +
+                '</div>';
+            scheduledList.appendChild(div);
+        });
+
+        // Bind toggle events
+        scheduledList.querySelectorAll('.sched-toggle').forEach(function(toggle) {
+            toggle.addEventListener('change', function() {
+                var idx = parseInt(toggle.dataset.schedIdx);
+                scheduledItems[idx].enabled = toggle.checked;
+                saveScheduledMessages();
+            });
+        });
+
+        // Bind delete events
+        scheduledList.querySelectorAll('.scheduled-item__delete').forEach(function(btn) {
+            btn.addEventListener('click', function() {
+                var idx = parseInt(btn.dataset.schedIdx);
+                if (!confirm('¿Eliminar este mensaje programado?')) return;
+                scheduledItems.splice(idx, 1);
+                saveScheduledMessages();
+                renderScheduledList();
+            });
+        });
+    }
+
+    function saveScheduledMessages() {
+        apiCall('/config/scheduled-messages', {
+            method: 'POST',
+            body: JSON.stringify({ messages: scheduledItems })
+        }).then(function() {
+            showToast('Mensajes programados actualizados');
+        }).catch(function(err) {
+            showToast(err.message || 'Error al guardar', 'error');
+        });
+    }
+
+    if (btnAddScheduled) {
+        btnAddScheduled.addEventListener('click', function() {
+            var groupId = schedGroupSelect ? schedGroupSelect.value : '';
+            var groupName = schedGroupSelect ? schedGroupSelect.options[schedGroupSelect.selectedIndex].text : '';
+            var intervalValue = schedIntervalVal ? parseInt(schedIntervalVal.value) : 1;
+            var intervalUnit = schedIntervalUnit ? schedIntervalUnit.value : 'hours';
+            var message = schedMessage ? schedMessage.value.trim() : '';
+
+            if (!groupId) { showToast('Selecciona un grupo', 'error'); return; }
+            if (!message) { showToast('Escribe un mensaje', 'error'); return; }
+            if (intervalValue < 1) { showToast('El intervalo debe ser al menos 1', 'error'); return; }
+
+            scheduledItems.push({
+                id: 'sched_' + Date.now(),
+                groupId: groupId,
+                groupName: groupName,
+                intervalValue: intervalValue,
+                intervalUnit: intervalUnit,
+                message: message,
+                enabled: true,
+                lastSent: null,
+                createdAt: new Date().toISOString()
+            });
+
+            saveScheduledMessages();
+            renderScheduledList();
+
+            // Clear form
+            if (schedGroupSelect) schedGroupSelect.value = '';
+            if (schedIntervalVal) schedIntervalVal.value = '1';
+            if (schedIntervalUnit) schedIntervalUnit.value = 'hours';
+            if (schedMessage) schedMessage.value = '';
+
+            showToast('Mensaje programado agregado');
+        });
     }
 
     // --- Demo QR ---
@@ -1200,22 +1487,33 @@
     }
 
     // ══════════════════════════════════════════════════════════
-    //  VENTAS (BETA) — Sales Analysis
+    //  VENTAS (V2) — Sales Analysis, Abandoned Detection, Follow-ups
     // ══════════════════════════════════════════════════════════
     (function initVentas() {
         var btnAnalyze = $('#btn-analyze-ventas');
+        var btnLoadHistory = $('#btn-load-ventas');
         var ventasStats = $('#ventas-stats');
         var ventasLoading = $('#ventas-loading');
         var ventasEmpty = $('#ventas-empty');
         var ventasResults = $('#ventas-results');
         var ventasList = $('#ventas-list');
+        var ventasFunnel = $('#ventas-funnel');
         var filterBtns = $$('.ventas-filter');
 
-        var analysisData = []; // store results for filtering
+        // Follow-up modal refs
+        var followupModal = $('#ventas-followup-modal');
+        var followupText = $('#ventas-followup-text');
+        var followupContact = $('#ventas-modal-contact');
+        var followupSendBtn = $('#ventas-modal-send');
+        var followupCancelBtn = $('#ventas-modal-cancel');
+        var followupCloseBtn = $('#ventas-modal-close');
+
+        var analysisData = [];
+        var currentFollowUpPhone = null;
 
         if (!btnAnalyze) return;
 
-        // Filter buttons
+        // ── Filter buttons ──
         filterBtns.forEach(function(btn) {
             btn.addEventListener('click', function() {
                 filterBtns.forEach(function(b) { b.classList.remove('ventas-filter--active'); });
@@ -1225,15 +1523,39 @@
             });
         });
 
-        // Analyze button
+        // ── Load history button ──
+        if (btnLoadHistory) {
+            btnLoadHistory.addEventListener('click', function() {
+                btnLoadHistory.disabled = true;
+                fetch(API + '/ventas/results', { headers: authHeaders() })
+                .then(function(r) { return r.json(); })
+                .then(function(data) {
+                    btnLoadHistory.disabled = false;
+                    if (data.ok && data.data && data.data.length > 0) {
+                        analysisData = data.data;
+                        showResults(analysisData);
+                        showToast('Último análisis cargado', 'success');
+                    } else {
+                        showToast('No hay análisis guardado', 'info');
+                    }
+                })
+                .catch(function() {
+                    btnLoadHistory.disabled = false;
+                    showToast('Error al cargar historial', 'error');
+                });
+            });
+        }
+
+        // ── Analyze button ──
         btnAnalyze.addEventListener('click', function() {
             ventasEmpty.style.display = 'none';
             ventasResults.style.display = 'none';
             ventasStats.style.display = 'none';
+            ventasFunnel.style.display = 'none';
             ventasLoading.style.display = 'flex';
             btnAnalyze.disabled = true;
             btnAnalyze.innerHTML =
-                '<svg class="ventas-loading__spinner" style="width:16px;height:16px;border-width:2px;margin:0 .4rem 0 0;" viewBox="0 0 24 24"></svg>' +
+                '<div class="ventas-loading__spinner" style="width:16px;height:16px;border-width:2px;margin:0 .4rem 0 0;display:inline-block;"></div>' +
                 'Analizando...';
 
             fetch(API + '/ventas/analyze', {
@@ -1243,10 +1565,7 @@
             .then(function(r) { return r.json(); })
             .then(function(data) {
                 ventasLoading.style.display = 'none';
-                btnAnalyze.disabled = false;
-                btnAnalyze.innerHTML =
-                    '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg>' +
-                    'Analizar conversaciones';
+                resetAnalyzeBtn();
 
                 if (!data.ok || !data.data || data.data.length === 0) {
                     ventasEmpty.style.display = 'flex';
@@ -1254,44 +1573,146 @@
                 }
 
                 analysisData = data.data;
-                updateVentasStats(analysisData);
-                ventasStats.style.display = 'grid';
-                ventasResults.style.display = 'block';
-                // Reset filter to 'all'
-                filterBtns.forEach(function(b) { b.classList.remove('ventas-filter--active'); });
-                var allBtn = document.querySelector('.ventas-filter[data-filter="all"]');
-                if (allBtn) allBtn.classList.add('ventas-filter--active');
-                renderVentasList(analysisData);
+                showResults(analysisData);
             })
             .catch(function(err) {
                 console.error('[Ventas] Analysis error:', err);
                 ventasLoading.style.display = 'none';
                 ventasEmpty.style.display = 'flex';
-                btnAnalyze.disabled = false;
-                btnAnalyze.innerHTML =
-                    '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg>' +
-                    'Analizar conversaciones';
+                resetAnalyzeBtn();
                 showToast('Error al analizar conversaciones', 'error');
             });
         });
 
+        function resetAnalyzeBtn() {
+            btnAnalyze.disabled = false;
+            btnAnalyze.innerHTML =
+                '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg>' +
+                'Analizar conversaciones';
+        }
+
+        function showResults(results) {
+            updateVentasStats(results);
+            updateFunnel(results);
+            ventasStats.style.display = 'grid';
+            ventasFunnel.style.display = 'block';
+            ventasResults.style.display = 'block';
+            ventasEmpty.style.display = 'none';
+            // Reset filter to 'all'
+            filterBtns.forEach(function(b) { b.classList.remove('ventas-filter--active'); });
+            var allBtn = document.querySelector('.ventas-filter[data-filter="all"]');
+            if (allBtn) allBtn.classList.add('ventas-filter--active');
+            renderVentasList(results);
+        }
+
         function updateVentasStats(results) {
-            var sales = 0, appointments = 0, leads = 0;
+            var sales = 0, abandoned = 0, appointments = 0, leads = 0;
             results.forEach(function(r) {
                 if (r.type === 'sale') sales++;
+                else if (r.type === 'abandoned') abandoned++;
                 else if (r.type === 'appointment') appointments++;
                 else if (r.type === 'lead') leads++;
             });
-            var totalSalesEl = $('#ventas-total-sales');
-            var totalAppEl = $('#ventas-total-appointments');
-            var totalLeadsEl = $('#ventas-total-leads');
-            var totalAnalyzedEl = $('#ventas-total-analyzed');
-            if (totalSalesEl) totalSalesEl.textContent = sales;
-            if (totalAppEl) totalAppEl.textContent = appointments;
-            if (totalLeadsEl) totalLeadsEl.textContent = leads;
-            if (totalAnalyzedEl) totalAnalyzedEl.textContent = results.length;
+            setText('#ventas-total-sales', sales);
+            setText('#ventas-total-abandoned', abandoned);
+            setText('#ventas-total-appointments', appointments);
+            setText('#ventas-total-leads', leads);
+            setText('#ventas-total-analyzed', results.length);
         }
 
+        function setText(sel, val) {
+            var el = document.querySelector(sel);
+            if (el) el.textContent = val;
+        }
+
+        function updateFunnel(results) {
+            var sales = 0, abandoned = 0, appointments = 0, leads = 0;
+            results.forEach(function(r) {
+                if (r.type === 'sale') sales++;
+                else if (r.type === 'abandoned') abandoned++;
+                else if (r.type === 'appointment') appointments++;
+                else if (r.type === 'lead') leads++;
+            });
+            var total = sales + abandoned + appointments + leads;
+            if (total === 0) { ventasFunnel.style.display = 'none'; return; }
+
+            setFunnelWidth('#funnel-leads', leads, total);
+            setFunnelWidth('#funnel-abandoned', abandoned, total);
+            setFunnelWidth('#funnel-appointments', appointments, total);
+            setFunnelWidth('#funnel-sales', sales, total);
+        }
+
+        function setFunnelWidth(sel, count, total) {
+            var el = document.querySelector(sel);
+            if (!el) return;
+            var pct = total > 0 ? Math.max(count > 0 ? 8 : 0, (count / total) * 100) : 0;
+            el.style.width = pct + '%';
+            el.style.display = count > 0 ? 'flex' : 'none';
+            el.querySelector('.ventas-funnel__segment-label').textContent =
+                count > 0 ? (el.title + ' ' + count) : '';
+        }
+
+        // ── Follow-up modal ──
+        function openFollowUpModal(phone, contactName, suggestedMsg) {
+            currentFollowUpPhone = phone;
+            followupContact.textContent = 'Para: ' + (contactName || phone);
+            followupText.value = suggestedMsg || '';
+            followupModal.style.display = 'flex';
+        }
+
+        function closeFollowUpModal() {
+            followupModal.style.display = 'none';
+            currentFollowUpPhone = null;
+        }
+
+        if (followupCloseBtn) followupCloseBtn.addEventListener('click', closeFollowUpModal);
+        if (followupCancelBtn) followupCancelBtn.addEventListener('click', closeFollowUpModal);
+        if (followupModal) followupModal.addEventListener('click', function(e) {
+            if (e.target === followupModal) closeFollowUpModal();
+        });
+
+        if (followupSendBtn) {
+            followupSendBtn.addEventListener('click', function() {
+                var msg = followupText.value.trim();
+                if (!msg || !currentFollowUpPhone) return;
+
+                followupSendBtn.disabled = true;
+                followupSendBtn.textContent = 'Enviando...';
+
+                fetch(API + '/ventas/followup', {
+                    method: 'POST',
+                    headers: Object.assign({}, authHeaders(), { 'Content-Type': 'application/json' }),
+                    body: JSON.stringify({ phone: currentFollowUpPhone, message: msg })
+                })
+                .then(function(r) { return r.json(); })
+                .then(function(data) {
+                    followupSendBtn.disabled = false;
+                    followupSendBtn.innerHTML =
+                        '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg> Enviar por WhatsApp';
+                    if (data.ok) {
+                        showToast('Mensaje de seguimiento enviado', 'success');
+                        // Update status in local data
+                        var item = analysisData.find(function(r) { return r.phone === currentFollowUpPhone; });
+                        if (item) item.salesStatus = 'contacted';
+                        closeFollowUpModal();
+                        // Re-render
+                        var activeFilter = document.querySelector('.ventas-filter--active');
+                        var filter = activeFilter ? activeFilter.dataset.filter : 'all';
+                        renderVentasList(filter === 'all' ? analysisData : analysisData.filter(function(r) { return r.type === filter; }));
+                    } else {
+                        showToast(data.error || 'Error al enviar', 'error');
+                    }
+                })
+                .catch(function() {
+                    followupSendBtn.disabled = false;
+                    followupSendBtn.innerHTML =
+                        '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg> Enviar por WhatsApp';
+                    showToast('Error al enviar seguimiento', 'error');
+                });
+            });
+        }
+
+        // ── Render results list ──
         function renderVentasList(results) {
             if (!ventasList) return;
             ventasList.innerHTML = '';
@@ -1303,16 +1724,23 @@
 
             results.forEach(function(r, idx) {
                 var typeLabels = {
-                    sale: 'Venta',
-                    appointment: 'Cita',
+                    sale: 'Venta confirmada',
+                    abandoned: 'Casi compró',
+                    appointment: 'Cita agendada',
                     lead: 'Lead interesado',
                     no_result: 'Sin resultado'
                 };
                 var typeIcons = {
-                    sale: '$',
+                    sale: '💰',
+                    abandoned: '🔥',
                     appointment: '📅',
                     lead: '👤',
                     no_result: '—'
+                };
+                var urgencyLabels = {
+                    high: '🔴 Urgente',
+                    medium: '🟡 Media',
+                    low: ''
                 };
 
                 var initials = (r.contactName || r.phone || '??')
@@ -1324,34 +1752,70 @@
                     .slice(0, 2) || '??';
 
                 var card = document.createElement('div');
-                card.className = 'ventas-item';
+                card.className = 'ventas-item' + (r.type === 'abandoned' ? ' ventas-item--abandoned' : '');
                 card.dataset.type = r.type;
 
+                // Details chips
                 var detailsHtml = '';
                 if (r.product) {
-                    detailsHtml += '<div class="ventas-detail"><span class="ventas-detail__label">Producto:</span><span class="ventas-detail__value">' + escHtml(r.product) + '</span></div>';
+                    detailsHtml += '<div class="ventas-chip"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="12" height="12"><path d="M6 2L3 6v14a2 2 0 002 2h14a2 2 0 002-2V6l-3-4z"/><line x1="3" y1="6" x2="21" y2="6"/><path d="M16 10a4 4 0 01-8 0"/></svg> ' + escHtml(r.product) + '</div>';
                 }
                 if (r.amount) {
-                    detailsHtml += '<div class="ventas-detail"><span class="ventas-detail__label">Monto:</span><span class="ventas-detail__value">' + escHtml(r.amount) + '</span></div>';
+                    detailsHtml += '<div class="ventas-chip ventas-chip--money"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="12" height="12"><path d="M12 2v20M17 5H9.5a3.5 3.5 0 000 7h5a3.5 3.5 0 010 7H6"/></svg> ' + escHtml(r.amount) + '</div>';
                 }
                 if (r.date) {
-                    detailsHtml += '<div class="ventas-detail"><span class="ventas-detail__label">Fecha:</span><span class="ventas-detail__value">' + escHtml(r.date) + '</span></div>';
+                    detailsHtml += '<div class="ventas-chip"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="12" height="12"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/></svg> ' + escHtml(r.date) + '</div>';
                 }
                 if (r.confidence) {
-                    detailsHtml += '<div class="ventas-detail"><span class="ventas-detail__label">Confianza:</span><span class="ventas-detail__value">' + r.confidence + '%</span></div>';
+                    detailsHtml += '<div class="ventas-chip ventas-chip--conf">' + r.confidence + '% confianza</div>';
+                }
+                if (r.urgency && urgencyLabels[r.urgency]) {
+                    detailsHtml += '<div class="ventas-chip ventas-chip--urgency-' + r.urgency + '">' + urgencyLabels[r.urgency] + '</div>';
                 }
 
-                // Preview messages
+                // Status badge
+                var statusHtml = '';
+                if (r.salesStatus === 'contacted') {
+                    statusHtml = '<span class="ventas-status-tag ventas-status-tag--contacted">✓ Contactado</span>';
+                } else if (r.salesStatus === 'won') {
+                    statusHtml = '<span class="ventas-status-tag ventas-status-tag--won">🏆 Ganado</span>';
+                } else if (r.salesStatus === 'lost') {
+                    statusHtml = '<span class="ventas-status-tag ventas-status-tag--lost">✗ Perdido</span>';
+                }
+
+                // Last activity info
+                var lastActivityHtml = '';
+                if (r.lastActivity) {
+                    lastActivityHtml = '<div class="ventas-item__last-activity"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="13" height="13"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg> ' + escHtml(r.lastActivity) + '</div>';
+                }
+
+                // Action buttons
+                var actionsHtml = '';
+                if (r.type === 'abandoned' || r.type === 'lead') {
+                    actionsHtml = '<div class="ventas-item__actions">';
+                    actionsHtml += '<button class="btn btn--accent btn--xs ventas-followup-btn" data-phone="' + escHtml(r.phone) + '" data-name="' + escHtml(r.contactName || r.phone) + '" data-msg="' + escHtml(r.followUp || '') + '">';
+                    actionsHtml += '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg> Enviar seguimiento';
+                    actionsHtml += '</button>';
+                    actionsHtml += '</div>';
+                }
+
+                // Preview
                 var previewHtml = '';
                 if (r.relevantMessages && r.relevantMessages.length > 0) {
                     r.relevantMessages.forEach(function(m) {
                         var cls = m.direction === 'incoming' ? 'ventas-preview-msg--incoming' : 'ventas-preview-msg--outgoing';
                         var sender = m.direction === 'incoming' ? (r.contactName || r.phone) : 'Bot';
                         previewHtml += '<div class="ventas-preview-msg ' + cls + '">' +
-                            '<span class="ventas-preview-msg__sender">' + escHtml(sender) + ':</span>' +
+                            '<span class="ventas-preview-msg__sender">' + escHtml(sender) + ':</span> ' +
                             escHtml(m.body) +
                             '</div>';
                     });
+                }
+
+                // Follow-up suggestion preview
+                var followUpHtml = '';
+                if (r.followUp && (r.type === 'abandoned' || r.type === 'lead')) {
+                    followUpHtml = '<div class="ventas-item__followup-hint"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14"><path d="M21 11.5a8.38 8.38 0 01-.9 3.8 8.5 8.5 0 01-7.6 4.7 8.38 8.38 0 01-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 01-.9-3.8 8.5 8.5 0 014.7-7.6 8.38 8.38 0 013.8-.9h.5a8.48 8.48 0 018 8v.5z"/></svg> IA sugiere: <em>"' + escHtml(r.followUp.substring(0, 80)) + (r.followUp.length > 80 ? '...' : '') + '"</em></div>';
                 }
 
                 card.innerHTML =
@@ -1359,18 +1823,21 @@
                         '<div class="ventas-item__contact">' +
                             '<div class="ventas-item__avatar ventas-item__avatar--' + r.type + '">' + initials + '</div>' +
                             '<div>' +
-                                '<div class="ventas-item__name">' + escHtml(r.contactName || r.phone) + '</div>' +
+                                '<div class="ventas-item__name">' + escHtml(r.contactName || r.phone) + ' ' + statusHtml + '</div>' +
                                 '<div class="ventas-item__phone">' + escHtml(r.phone) + '</div>' +
                             '</div>' +
                         '</div>' +
                         '<span class="ventas-badge ventas-badge--' + r.type + '">' + typeIcons[r.type] + ' ' + (typeLabels[r.type] || r.type) + '</span>' +
                     '</div>' +
                     '<p class="ventas-item__summary">' + escHtml(r.summary) + '</p>' +
-                    (detailsHtml ? '<div class="ventas-item__details">' + detailsHtml + '</div>' : '') +
+                    lastActivityHtml +
+                    (detailsHtml ? '<div class="ventas-item__chips">' + detailsHtml + '</div>' : '') +
+                    followUpHtml +
+                    actionsHtml +
                     (previewHtml ?
                         '<button class="ventas-item__toggle" data-idx="' + idx + '">' +
                             '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"/></svg>' +
-                            'Ver conversación relevante' +
+                            ' Ver conversación relevante' +
                         '</button>' +
                         '<div class="ventas-item__preview" id="ventas-preview-' + idx + '">' + previewHtml + '</div>'
                     : '');
@@ -1378,7 +1845,14 @@
                 ventasList.appendChild(card);
             });
 
-            // Toggle preview
+            // ── Event delegation for follow-up buttons ──
+            ventasList.querySelectorAll('.ventas-followup-btn').forEach(function(btn) {
+                btn.addEventListener('click', function() {
+                    openFollowUpModal(btn.dataset.phone, btn.dataset.name, btn.dataset.msg);
+                });
+            });
+
+            // ── Toggle preview ──
             ventasList.querySelectorAll('.ventas-item__toggle').forEach(function(btn) {
                 btn.addEventListener('click', function() {
                     var preview = document.getElementById('ventas-preview-' + btn.dataset.idx);
@@ -1386,7 +1860,8 @@
                         var isOpen = preview.classList.contains('ventas-item__preview--open');
                         preview.classList.toggle('ventas-item__preview--open');
                         btn.classList.toggle('ventas-item__toggle--open');
-                        btn.querySelector('svg').nextSibling.textContent = isOpen ? ' Ver conversación relevante' : ' Ocultar conversación';
+                        var textNode = btn.lastChild;
+                        if (textNode) textNode.textContent = isOpen ? ' Ver conversación relevante' : ' Ocultar conversación';
                     }
                 });
             });

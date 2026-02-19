@@ -480,8 +480,85 @@ app.delete('/api/messages', authMiddleware, async (req, res) => {
 });
 
 // ══════════════════════════════════════════════════════════
-//  VENTAS (BETA) — AI-powered sales analysis
+//  VENTAS (V2) — AI-powered sales analysis & real-time detection
 // ══════════════════════════════════════════════════════════
+
+// ── Firestore helpers for sales data ──
+async function loadSalesResults(uid) {
+    try {
+        const doc = await db.collection('users').doc(uid).collection('meta').doc('salesResults').get();
+        return doc.exists ? (doc.data().results || []) : [];
+    } catch (e) { console.error('[Firestore] loadSalesResults error:', e.message); }
+    return [];
+}
+async function saveSalesResults(uid, results) {
+    try {
+        await db.collection('users').doc(uid).collection('meta').doc('salesResults').set({
+            results,
+            updatedAt: new Date().toISOString()
+        });
+    } catch (e) { console.error('[Firestore] saveSalesResults error:', e.message); }
+}
+
+// ── Build the advanced sales-analysis prompt ──
+function buildSalesPrompt(convoTexts, businessContext) {
+    return `Eres un analista de ventas y CRM experto especializado en negocios de WhatsApp. Tu trabajo es detectar con precisión:
+- Ventas completadas (el cliente confirmó un pedido/compra)
+- Clientes que CASI compraron (mostraron intención de compra clara pero abandonaron la conversación o no confirmaron)
+- Citas/reuniones agendadas
+- Leads interesados (hicieron preguntas sobre productos/precios)
+
+${businessContext ? `CONTEXTO DEL NEGOCIO:\n${businessContext}\n` : ''}
+CRITERIOS DE CLASIFICACIÓN:
+
+🟢 "sale" — Venta confirmada:
+- El cliente dijo explícitamente que quiere comprar/pedir/ordenar algo Y confirmó (ej: "sí, quiero 2", "mándame eso", "ya te transferí", "perfecto, lo quiero")
+- El negocio confirmó el pedido (ej: "listo, tu pedido está en camino", "anotado")
+- Se mencionaron productos específicos del menú/catálogo + confirmación
+
+🟡 "abandoned" — Casi compró (ABANDONADO):
+- El cliente preguntó precios de productos específicos y luego dejó de responder
+- El cliente dijo "déjame pensarlo", "ahorita no", "luego te aviso", "al rato" y no volvió
+- El cliente pidió algo pero nunca confirmó (ej: "¿cuánto cuesta X?" → bot responde → silencio)
+- El cliente empezó a armar un pedido pero no lo completó
+- Hubo intención de compra clara pero la conversación murió
+- Han pasado MÁS de 2 horas desde el último mensaje del cliente sin confirmación
+
+🔵 "appointment" — Cita/reunión agendada:
+- Se acordó una fecha, hora o día específico para verse/reunirse
+- El cliente confirmó asistir a la cita
+
+🟠 "lead" — Lead interesado:
+- El cliente hizo preguntas sobre el negocio, productos o servicios
+- Mostró curiosidad pero no avanzó al interés de compra
+- Primera interacción sin intención clara de compra
+
+⚫ "no_result" — Sin valor comercial:
+- Conversación puramente social, spam o consulta de horarios sin interés
+- Mensajes cortos sin contexto ("ok", "gracias", saludos sin más)
+
+Para CADA conversación, responde con:
+1. **type**: "sale", "abandoned", "appointment", "lead", "no_result"
+2. **summary**: Resumen en español (1-2 oraciones) de qué pasó
+3. **product**: Producto/servicio mencionado (vacío si no aplica)
+4. **amount**: Monto/precio mencionado (vacío si no se mencionó)
+5. **date**: Fecha si aplica (cita/entrega)
+6. **confidence**: Confianza 0-100
+7. **intent**: Intención detectada: "compra_confirmada", "compra_abandonada", "interés_alto", "interés_bajo", "consulta", "spam"
+8. **followUp**: Sugerencia de mensaje para re-contactar al cliente (SOLO para "abandoned" y "lead"). Debe ser natural, corto y persuasivo. Ejemplo: "¡Hola! Vi que te interesó X, ¿te lo aparto?" Vacío para otros tipos.
+9. **urgency**: "high" (abandonó hace poco, alta probabilidad de cerrar), "medium" (lead con interés), "low" (sin urgencia)
+10. **relevantMsgIndices**: Índices (0-based) de los mensajes más relevantes (máx 5)
+11. **lastActivity**: Descripción breve de la última acción del cliente (ej: "Preguntó precio de pizza", "Confirmó pedido", "Dejó de responder después de ver precios")
+
+Responde SOLO con un JSON array válido. Ejemplo:
+[
+  {"type":"sale","summary":"Compró 2 pizzas grandes con envío.","product":"Pizza grande x2","amount":"$300","date":"","confidence":95,"intent":"compra_confirmada","followUp":"","urgency":"low","relevantMsgIndices":[3,5,8],"lastActivity":"Confirmó el pedido"},
+  {"type":"abandoned","summary":"Preguntó por hamburguesas, vio precios pero nunca confirmó.","product":"Hamburguesa especial","amount":"$150","date":"","confidence":85,"intent":"compra_abandonada","followUp":"¡Hola! 😊 Vi que te interesó nuestra hamburguesa especial. ¿Te la preparamos? Hoy tenemos promoción.","urgency":"high","relevantMsgIndices":[0,2,4],"lastActivity":"Dejó de responder después de ver el menú"}
+]
+
+CONVERSACIONES A ANALIZAR:
+${convoTexts}`;
+}
 
 app.post('/api/ventas/analyze', authMiddleware, async (req, res) => {
     try {
@@ -490,22 +567,30 @@ app.post('/api/ventas/analyze', authMiddleware, async (req, res) => {
             return res.json({ ok: true, data: [] });
         }
 
-        // Group messages by contact
+        // Load user config for business context
+        const config = await loadUserConfig(req.uid);
+        let businessContext = '';
+        if (config.businessName) businessContext += `Nombre: ${config.businessName}\n`;
+        if (config.businessDescription) businessContext += `Descripción: ${config.businessDescription}\n`;
+        if (config.menu) businessContext += `Menú/Productos:\n${config.menu}\n`;
+
+        // Group messages by contact (skip groups)
         const convos = {};
         msgs.forEach(m => {
             const key = m.from;
             if (!convos[key]) {
-                convos[key] = { phone: key, senderName: m.senderName || key, messages: [] };
+                convos[key] = { phone: key, senderName: m.senderName || key, messages: [], lastTimestamp: null };
             }
             convos[key].messages.push(m);
+            if (m.timestamp) convos[key].lastTimestamp = m.timestamp;
             if (m.senderName && m.senderName !== 'Bot' && m.senderName !== 'Tú (manual)') {
                 convos[key].senderName = m.senderName;
             }
         });
 
         const conversations = Object.values(convos);
-        // Only analyze conversations with at least 3 messages
-        const toAnalyze = conversations.filter(c => c.messages.length >= 3);
+        // Only analyze conversations with at least 2 messages (lowered from 3 to catch more)
+        const toAnalyze = conversations.filter(c => c.messages.length >= 2);
 
         if (toAnalyze.length === 0) {
             return res.json({ ok: true, data: [] });
@@ -522,44 +607,28 @@ app.post('/api/ventas/analyze', authMiddleware, async (req, res) => {
 
         const results = [];
 
-        // Analyze in batches of up to 5 conversations per prompt to save API calls
+        // Analyze in batches of up to 5 conversations per prompt
         const BATCH_SIZE = 5;
         for (let i = 0; i < toAnalyze.length; i += BATCH_SIZE) {
             const batch = toAnalyze.slice(i, i + BATCH_SIZE);
 
             const convoTexts = batch.map((c, idx) => {
-                const lastMsgs = c.messages.slice(-30); // last 30 msgs
+                const lastMsgs = c.messages.slice(-40); // last 40 msgs for better context
                 const transcript = lastMsgs.map(m => {
                     const who = m.direction === 'incoming' ? (c.senderName || c.phone) : 'Bot';
                     return `[${who}]: ${m.body}`;
                 }).join('\n');
-                return `--- CONVERSACIÓN ${idx + 1} (Contacto: ${c.senderName || c.phone}, Tel: ${c.phone}) ---\n${transcript}\n--- FIN CONVERSACIÓN ${idx + 1} ---`;
+                const timeSinceLastMsg = c.lastTimestamp
+                    ? Math.round((Date.now() - new Date(c.lastTimestamp).getTime()) / (1000 * 60)) + ' minutos'
+                    : 'desconocido';
+                return `--- CONVERSACIÓN ${idx + 1} (Contacto: ${c.senderName || c.phone}, Tel: ${c.phone}, Última actividad hace: ${timeSinceLastMsg}) ---\n${transcript}\n--- FIN CONVERSACIÓN ${idx + 1} ---`;
             }).join('\n\n');
 
-            const prompt = `Eres un analista de ventas experto. Analiza las siguientes conversaciones de WhatsApp entre un negocio (Bot) y clientes.
-
-Para CADA conversación, determina:
-1. **type**: El tipo de resultado. DEBE ser uno de: "sale" (se concretó una venta/compra), "appointment" (se agendó una cita/reunión/visita), "lead" (el cliente mostró interés pero no se concretó nada), "no_result" (conversación casual, consulta sin interés real, o spam).
-2. **summary**: Un resumen breve (1-2 oraciones) en español de lo que pasó en la conversación.
-3. **product**: Si aplica, qué producto/servicio se vendió o se preguntó. Dejar vacío si no aplica.
-4. **amount**: Si se mencionó un precio o monto, indicarlo. Dejar vacío si no se mencionó.
-5. **date**: Si se mencionó una fecha para cita o entrega, indicarla. Dejar vacío si no aplica.
-6. **confidence**: Nivel de confianza de tu clasificación (0-100).
-7. **relevantMsgIndices**: Array de índices (0-based) de los mensajes más relevantes para la clasificación (máximo 5 mensajes).
-
-Responde SOLO con un JSON array válido. Cada elemento corresponde a una conversación en orden. Ejemplo:
-[
-  {"type":"sale","summary":"El cliente compró 2 pizzas grandes.","product":"Pizza grande x2","amount":"$300","date":"","confidence":90,"relevantMsgIndices":[3,5,8,12]},
-  {"type":"no_result","summary":"Solo preguntó el horario.","product":"","amount":"","date":"","confidence":95,"relevantMsgIndices":[0,1]}
-]
-
-CONVERSACIONES A ANALIZAR:
-${convoTexts}`;
+            const prompt = buildSalesPrompt(convoTexts, businessContext);
 
             try {
                 const result = await model.generateContent(prompt);
                 const responseText = result.response.text();
-                // Extract JSON from response (handle markdown code blocks)
                 let jsonStr = responseText;
                 const jsonMatch = responseText.match(/```(?:json)?\s*([\s\S]*?)```/);
                 if (jsonMatch) jsonStr = jsonMatch[1];
@@ -571,7 +640,7 @@ ${convoTexts}`;
                     parsed.forEach((analysis, idx) => {
                         if (idx < batch.length) {
                             const conv = batch[idx];
-                            const lastMsgs = conv.messages.slice(-30);
+                            const lastMsgs = conv.messages.slice(-40);
                             const relevantMsgs = (analysis.relevantMsgIndices || [])
                                 .filter(i => i >= 0 && i < lastMsgs.length)
                                 .slice(0, 5)
@@ -584,53 +653,127 @@ ${convoTexts}`;
                             results.push({
                                 phone: conv.phone,
                                 contactName: conv.senderName,
-                                type: ['sale','appointment','lead','no_result'].includes(analysis.type) ? analysis.type : 'no_result',
+                                type: ['sale','abandoned','appointment','lead','no_result'].includes(analysis.type) ? analysis.type : 'no_result',
                                 summary: analysis.summary || 'Sin resumen disponible.',
                                 product: analysis.product || '',
                                 amount: analysis.amount || '',
                                 date: analysis.date || '',
                                 confidence: Math.min(100, Math.max(0, parseInt(analysis.confidence) || 50)),
+                                intent: analysis.intent || '',
+                                followUp: analysis.followUp || '',
+                                urgency: ['high','medium','low'].includes(analysis.urgency) ? analysis.urgency : 'low',
+                                lastActivity: analysis.lastActivity || '',
                                 relevantMessages: relevantMsgs,
-                                totalMessages: conv.messages.length
+                                totalMessages: conv.messages.length,
+                                lastTimestamp: conv.lastTimestamp,
+                                analyzedAt: new Date().toISOString()
                             });
                         }
                     });
                 }
             } catch (parseErr) {
                 console.error('[Ventas] AI parse error for batch:', parseErr.message);
-                // Add fallback results for this batch
                 batch.forEach(conv => {
                     results.push({
                         phone: conv.phone,
                         contactName: conv.senderName,
                         type: 'no_result',
                         summary: 'No se pudo analizar esta conversación.',
-                        product: '',
-                        amount: '',
-                        date: '',
-                        confidence: 0,
-                        relevantMessages: [],
-                        totalMessages: conv.messages.length
+                        product: '', amount: '', date: '',
+                        confidence: 0, intent: '', followUp: '', urgency: 'low',
+                        lastActivity: '', relevantMessages: [],
+                        totalMessages: conv.messages.length,
+                        lastTimestamp: conv.lastTimestamp,
+                        analyzedAt: new Date().toISOString()
                     });
                 });
             }
 
-            // Small delay between batches to avoid rate limiting
             if (i + BATCH_SIZE < toAnalyze.length) {
                 await new Promise(r => setTimeout(r, 1000));
             }
         }
 
-        // Sort: sales first, then appointments, leads, no_result
-        const typePriority = { sale: 0, appointment: 1, lead: 2, no_result: 3 };
-        results.sort((a, b) => (typePriority[a.type] || 3) - (typePriority[b.type] || 3));
+        // Sort: abandoned (urgent) first, then sales, appointments, leads, no_result
+        const typePriority = { abandoned: 0, sale: 1, appointment: 2, lead: 3, no_result: 4 };
+        const urgencyPriority = { high: 0, medium: 1, low: 2 };
+        results.sort((a, b) => {
+            const tp = (typePriority[a.type] || 4) - (typePriority[b.type] || 4);
+            if (tp !== 0) return tp;
+            return (urgencyPriority[a.urgency] || 2) - (urgencyPriority[b.urgency] || 2);
+        });
 
-        console.log(`[Ventas] Analyzed ${toAnalyze.length} conversations for ${req.email}: ${results.filter(r => r.type === 'sale').length} sales, ${results.filter(r => r.type === 'appointment').length} appointments, ${results.filter(r => r.type === 'lead').length} leads`);
+        // Save results to Firestore for persistence
+        await saveSalesResults(req.uid, results);
+
+        console.log(`[Ventas] Analyzed ${toAnalyze.length} conversations for ${req.email}: ${results.filter(r => r.type === 'sale').length} sales, ${results.filter(r => r.type === 'abandoned').length} abandoned, ${results.filter(r => r.type === 'appointment').length} appointments, ${results.filter(r => r.type === 'lead').length} leads`);
         res.json({ ok: true, data: results });
 
     } catch (err) {
         console.error('[Ventas] Analysis error:', err);
         res.status(500).json({ error: 'Error al analizar conversaciones: ' + err.message });
+    }
+});
+
+// ── Load persisted sales results ──
+app.get('/api/ventas/results', authMiddleware, async (req, res) => {
+    try {
+        const results = await loadSalesResults(req.uid);
+        res.json({ ok: true, data: results });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// ── Send follow-up message to a contact ──
+app.post('/api/ventas/followup', authMiddleware, async (req, res) => {
+    try {
+        const { phone, message } = req.body;
+        if (!phone || !message) return res.status(400).json({ error: 'phone and message required' });
+
+        const bot = userBots.get(req.uid);
+        if (!bot || !bot.sock) return res.status(400).json({ error: 'Bot no conectado' });
+
+        const jid = phone.includes('@') ? phone : phone + '@s.whatsapp.net';
+        await bot.sock.sendMessage(jid, { text: message });
+
+        // Save the follow-up message
+        const outMsg = {
+            id: 'followup_' + Date.now(),
+            from: phone,
+            senderName: 'Seguimiento',
+            body: message,
+            direction: 'outgoing',
+            timestamp: new Date().toISOString(),
+            isFollowUp: true
+        };
+        await saveMessage(req.uid, outMsg);
+        io.to(`bot_${req.uid}`).emit('new_message', outMsg);
+
+        console.log(`[Ventas] Follow-up sent to ${phone} by ${req.email}`);
+        res.json({ ok: true });
+    } catch (err) {
+        console.error('[Ventas] Follow-up error:', err);
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// ── Mark a sales result with a status (e.g. "contacted", "won", "lost") ──
+app.post('/api/ventas/update-status', authMiddleware, async (req, res) => {
+    try {
+        const { phone, status } = req.body;
+        if (!phone || !status) return res.status(400).json({ error: 'phone and status required' });
+
+        const results = await loadSalesResults(req.uid);
+        const item = results.find(r => r.phone === phone);
+        if (item) {
+            item.salesStatus = status;
+            item.statusUpdatedAt = new Date().toISOString();
+            await saveSalesResults(req.uid, results);
+        }
+        res.json({ ok: true });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
     }
 });
 
@@ -722,6 +865,140 @@ app.post('/api/bot/approve-reply', authMiddleware, async (req, res) => {
         res.status(500).json({ error: 'Error al enviar respuesta: ' + e.message });
     }
 });
+
+// ══════════════════════════════════════════════════════════
+//  MESSAGE FILTERS & SCHEDULED MESSAGES ROUTES
+// ══════════════════════════════════════════════════════════
+
+// Get message filters
+app.get('/api/config/message-filters', authMiddleware, async (req, res) => {
+    const config = await loadUserConfig(req.uid);
+    res.json({ ok: true, data: config.messageFilters || {
+        replySavedContacts: true,
+        replyUnsavedContacts: true,
+        replyGroups: false,
+        selectedGroups: []
+    }});
+});
+
+// Save message filters
+app.post('/api/config/message-filters', authMiddleware, async (req, res) => {
+    const { replySavedContacts, replyUnsavedContacts, replyGroups, selectedGroups } = req.body;
+    const filters = {
+        replySavedContacts: replySavedContacts !== false,
+        replyUnsavedContacts: replyUnsavedContacts !== false,
+        replyGroups: !!replyGroups,
+        selectedGroups: Array.isArray(selectedGroups) ? selectedGroups : []
+    };
+    await saveUserConfig(req.uid, { messageFilters: filters });
+    console.log(`[Config] Message filters updated for ${req.email}:`, JSON.stringify(filters));
+    res.json({ ok: true, data: filters });
+});
+
+// Get groups from connected bot
+app.get('/api/bot/groups', authMiddleware, async (req, res) => {
+    const bot = userBots.get(req.uid);
+    if (!bot || bot.status !== 'connected' || !bot.sock) {
+        return res.json({ ok: true, data: [] });
+    }
+    try {
+        const groups = await bot.sock.groupFetchAllParticipating();
+        const groupList = Object.values(groups).map(g => ({
+            id: g.id,
+            name: g.subject || g.id,
+            participants: (g.participants || []).length,
+            desc: g.desc || ''
+        }));
+        groupList.sort((a, b) => a.name.localeCompare(b.name));
+        res.json({ ok: true, data: groupList });
+    } catch (e) {
+        console.error(`[Bot] Error fetching groups:`, e.message);
+        res.json({ ok: true, data: [] });
+    }
+});
+
+// Get scheduled messages
+app.get('/api/config/scheduled-messages', authMiddleware, async (req, res) => {
+    const config = await loadUserConfig(req.uid);
+    res.json({ ok: true, data: config.scheduledMessages || [] });
+});
+
+// Save scheduled messages
+app.post('/api/config/scheduled-messages', authMiddleware, async (req, res) => {
+    const { messages } = req.body;
+    if (!Array.isArray(messages)) {
+        return res.status(400).json({ error: 'Se requiere un array de mensajes.' });
+    }
+    await saveUserConfig(req.uid, { scheduledMessages: messages });
+    // Restart scheduled timers for this user
+    restartScheduledTimers(req.uid);
+    console.log(`[Config] Scheduled messages updated for ${req.email}: ${messages.length} messages`);
+    res.json({ ok: true, data: messages });
+});
+
+// ─── Scheduled Messages Timer System ───
+const scheduledTimers = new Map(); // uid -> intervalId[]
+
+function restartScheduledTimers(uid) {
+    // Clear existing timers for this user
+    const existing = scheduledTimers.get(uid) || [];
+    existing.forEach(id => clearInterval(id));
+    scheduledTimers.set(uid, []);
+
+    // Load config and set up new timers
+    loadUserConfig(uid).then(config => {
+        const messages = config.scheduledMessages || [];
+        const bot = userBots.get(uid);
+        if (!bot || bot.status !== 'connected' || !bot.sock) return;
+
+        const timers = [];
+        messages.forEach((msg, idx) => {
+            if (!msg.enabled || !msg.groupId || !msg.message) return;
+
+            let intervalMs;
+            switch (msg.intervalUnit) {
+                case 'minutes': intervalMs = msg.intervalValue * 60 * 1000; break;
+                case 'hours':   intervalMs = msg.intervalValue * 60 * 60 * 1000; break;
+                case 'days':    intervalMs = msg.intervalValue * 24 * 60 * 60 * 1000; break;
+                default:        intervalMs = msg.intervalValue * 60 * 60 * 1000;
+            }
+
+            // Minimum 1 minute
+            intervalMs = Math.max(intervalMs, 60000);
+
+            const timerId = setInterval(async () => {
+                try {
+                    const currentBot = userBots.get(uid);
+                    if (!currentBot || currentBot.status !== 'connected' || !currentBot.sock) {
+                        return;
+                    }
+                    const jid = msg.groupId.includes('@') ? msg.groupId : msg.groupId;
+                    await currentBot.sock.sendMessage(jid, { text: msg.message });
+
+                    // Update lastSent timestamp
+                    const freshConfig = await loadUserConfig(uid);
+                    const freshMsgs = freshConfig.scheduledMessages || [];
+                    if (freshMsgs[idx]) {
+                        freshMsgs[idx].lastSent = new Date().toISOString();
+                        await saveUserConfig(uid, { scheduledMessages: freshMsgs });
+                    }
+                    console.log(`[Scheduled] Sent message to group ${msg.groupName || msg.groupId} for user ${uid}`);
+                } catch (e) {
+                    console.error(`[Scheduled] Error sending to group ${msg.groupId}:`, e.message);
+                }
+            }, intervalMs);
+
+            timers.push(timerId);
+        });
+
+        scheduledTimers.set(uid, timers);
+        if (timers.length > 0) {
+            console.log(`[Scheduled] Started ${timers.length} timer(s) for user ${uid}`);
+        }
+    }).catch(e => {
+        console.error(`[Scheduled] Error loading config for ${uid}:`, e.message);
+    });
+}
 
 // ══════════════════════════════════════════════════════════
 //  STRIPE / SUBSCRIPTION ROUTES
@@ -1355,6 +1632,8 @@ async function startBot(uid, email) {
             const phoneNumber = sock.user?.id?.split(':')[0] || sock.user?.id || 'unknown';
             console.log(`[Bot] Connected for ${email} — ${phoneNumber}`);
             io.to(room).emit('ready');
+            // Start scheduled message timers
+            restartScheduledTimers(uid);
         }
 
         if (connection === 'close') {
@@ -1401,10 +1680,12 @@ async function startBot(uid, email) {
                     || null;
                 if (!text) continue;
 
-                // Skip own messages, group messages, status broadcasts
+                // Skip own messages and status broadcasts
                 if (msg.key.fromMe) continue;
                 const jid = msg.key.remoteJid;
-                if (!jid || jid.endsWith('@g.us') || jid === 'status@broadcast') continue;
+                if (!jid || jid === 'status@broadcast') continue;
+
+                const isGroup = jid.endsWith('@g.us');
 
                 // Dedup
                 const msgId = msg.key.id;
@@ -1427,10 +1708,46 @@ async function startBot(uid, email) {
                     }
                 }
 
+                // Load this user's config (once)
+                const config = await loadUserConfig(uid);
+                const filters = config.messageFilters || { replySavedContacts: true, replyUnsavedContacts: true, replyGroups: false, selectedGroups: [] };
+
+                // ── Group message filtering ──
+                if (isGroup) {
+                    if (!filters.replyGroups) {
+                        continue; // Groups disabled
+                    }
+                    // If specific groups are selected, check if this group is in the list
+                    if (filters.selectedGroups && filters.selectedGroups.length > 0) {
+                        if (!filters.selectedGroups.includes(jid)) {
+                            continue; // This group is not selected
+                        }
+                    }
+                }
+
+                // ── Contact type filtering (saved/unsaved) ──
+                if (!isGroup) {
+                    const hasPushName = !!msg.pushName && msg.pushName !== msg.key.remoteJid?.replace('@s.whatsapp.net', '');
+                    // pushName is the name from the contact's own profile, not your address book.
+                    // We use store contacts if available, or fall back to pushName heuristic.
+                    const isSavedContact = hasPushName; // Best approximation without full contact store
+
+                    if (isSavedContact && !filters.replySavedContacts) {
+                        console.log(`[Bot][${email}] 🚫 Saved contact filtered — skipping`);
+                        continue;
+                    }
+                    if (!isSavedContact && !filters.replyUnsavedContacts) {
+                        console.log(`[Bot][${email}] 🚫 Unsaved contact filtered — skipping`);
+                        continue;
+                    }
+                }
+
                 // Extract phone number and sender name
-                const phone = jid.replace('@s.whatsapp.net', '');
-                const senderName = msg.pushName || phone;
-                console.log(`[Bot][${email}] 📩 ${senderName}: ${text.substring(0, 80)}`);
+                const phone = isGroup ? jid : jid.replace('@s.whatsapp.net', '');
+                const senderName = isGroup
+                    ? (msg.pushName || msg.key.participant?.replace('@s.whatsapp.net', '') || jid)
+                    : (msg.pushName || phone);
+                console.log(`[Bot][${email}] 📩 ${isGroup ? '[Grupo] ' : ''}${senderName}: ${text.substring(0, 80)}`);
 
                 botState.stats.messagesToday++;
                 io.to(room).emit('stats', botState.stats);
@@ -1442,13 +1759,11 @@ async function startBot(uid, email) {
                     senderName: senderName,
                     body: text,
                     direction: 'incoming',
-                    timestamp: new Date().toISOString()
+                    timestamp: new Date().toISOString(),
+                    isGroup: isGroup
                 };
                 await saveMessage(uid, incomingMsg);
                 io.to(room).emit('new_message', incomingMsg);
-
-                // Load this user's config
-                const config = await loadUserConfig(uid);
 
                 // Check if this chat is paused
                 const pausedChats = config.pausedChats || [];
@@ -1500,6 +1815,11 @@ async function startBot(uid, email) {
 async function stopBot(uid) {
     const bot = userBots.get(uid);
     if (!bot) return;
+
+    // Clear scheduled message timers
+    const timers = scheduledTimers.get(uid) || [];
+    timers.forEach(id => clearInterval(id));
+    scheduledTimers.delete(uid);
 
     try {
         if (bot.sock) {
