@@ -1610,6 +1610,128 @@
     }
 
     // ══════════════════════════════════════════════════════════
+    //  MI CUENTA — Account Stats & Logout
+    // ══════════════════════════════════════════════════════════
+    (function initAccount() {
+        var accountLoaded = false;
+
+        // Populate profile from local user object
+        function populateProfile() {
+            var nameEl  = $('#account-name');
+            var emailEl = $('#account-email');
+            var avatarEl = $('#account-avatar');
+            if (nameEl)  nameEl.textContent = user.name || 'Usuario';
+            if (emailEl) emailEl.textContent = user.email || '';
+            if (avatarEl) {
+                if (user.photo) {
+                    avatarEl.innerHTML = '<img src="' + user.photo + '" alt="Avatar">';
+                } else {
+                    var initials = (user.name || user.email || '?')
+                        .split(' ').map(function(w) { return w[0]; }).join('').toUpperCase().slice(0, 2);
+                    avatarEl.textContent = initials;
+                }
+            }
+        }
+
+        function loadAccountStats() {
+            if (isPreview) return;
+            apiCall('/account/stats').then(function(res) {
+                if (!res) return;
+
+                // Stats grid
+                var s = function(id, val) {
+                    var el = $('#' + id);
+                    if (el) el.textContent = val != null ? val : '—';
+                };
+                s('acct-total-conversations', res.messages ? res.messages.totalConversations : 0);
+                s('acct-total-incoming', res.messages ? res.messages.totalIncoming : 0);
+                s('acct-total-outgoing', res.messages ? res.messages.totalOutgoing : 0);
+                s('acct-sales-completed', res.sales ? res.sales.completed : 0);
+                s('acct-leads', res.sales ? res.sales.leads : 0);
+                s('acct-today-msgs', res.messages ? (res.messages.todayIncoming + res.messages.todayOutgoing) : 0);
+
+                // Plan badge
+                var badge = $('#account-plan-badge');
+                if (badge && res.subscription) {
+                    var plan = (res.subscription.plan || 'trial').toLowerCase();
+                    badge.textContent = plan.charAt(0).toUpperCase() + plan.slice(1);
+                    badge.className = 'account-profile__plan account-profile__plan--' +
+                        (plan === 'trial' ? 'trial' : (res.subscription.status === 'active' ? 'active' : 'expired'));
+                }
+
+                // Subscription card
+                s('acct-sub-plan', res.subscription ? (res.subscription.plan || 'Trial') : 'Trial');
+                var statusEl = $('#acct-sub-status');
+                if (statusEl && res.subscription) {
+                    var st = res.subscription.status || 'inactive';
+                    statusEl.textContent = st === 'active' ? 'Activa' : st === 'trialing' ? 'Prueba' : 'Inactiva';
+                    statusEl.style.color = st === 'active' ? 'var(--accent)' : st === 'trialing' ? '#fbbf24' : 'var(--danger)';
+                }
+                var expiresEl = $('#acct-sub-expires');
+                if (expiresEl && res.subscription && res.subscription.currentPeriodEnd) {
+                    var d = new Date(res.subscription.currentPeriodEnd);
+                    expiresEl.textContent = d.toLocaleDateString('es-ES', { day: 'numeric', month: 'short', year: 'numeric' });
+                } else if (expiresEl) {
+                    expiresEl.textContent = '—';
+                }
+
+                // Bot status
+                var botEl = $('#acct-bot-status');
+                if (botEl && res.bot) {
+                    var connected = res.bot.status === 'connected';
+                    botEl.innerHTML = '<span style="display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:6px;background:' +
+                        (connected ? 'var(--accent)' : 'var(--danger)') + '"></span>' +
+                        (connected ? 'Conectado' : 'Desconectado') +
+                        (res.bot.paused ? ' (Pausado)' : '');
+                }
+
+                accountLoaded = true;
+            }).catch(function(err) {
+                console.warn('Error loading account stats:', err);
+            });
+        }
+
+        populateProfile();
+
+        // Lazy load: only fetch stats when user navigates to account section
+        var origNavigate = navigateTo;
+        navigateTo = function(name) {
+            origNavigate(name);
+            if (name === 'account' && !accountLoaded) {
+                loadAccountStats();
+            }
+        };
+
+        // Logout button in account section
+        var btnLogoutAcct = $('#btn-logout-account');
+        if (btnLogoutAcct) {
+            btnLogoutAcct.addEventListener('click', function() {
+                localStorage.removeItem('botsaas_token');
+                localStorage.removeItem('botsaas_user');
+                if (socket) socket.disconnect();
+                try {
+                    var fbConfig = {
+                        apiKey: 'AIzaSyCcBN4HTgTdYLJR4VfCnAs7hlWWD-VnHb8',
+                        authDomain: 'chatbot-1d169.firebaseapp.com',
+                        projectId: 'chatbot-1d169'
+                    };
+                    if (!firebase.apps.length) firebase.initializeApp(fbConfig);
+                    firebase.auth().signOut().then(function() {
+                        window.location.href = '/';
+                    }).catch(function() {
+                        window.location.href = '/';
+                    });
+                } catch (e) {
+                    console.warn('Firebase signOut error:', e);
+                    window.location.href = '/';
+                }
+            });
+        }
+
+        // "Cambiar plan" and "Ir a Conexión" use data-goto, already wired
+    })();
+
+    // ══════════════════════════════════════════════════════════
     //  VENTAS (V2) — Sales Analysis, Abandoned Detection, Follow-ups
     // ══════════════════════════════════════════════════════════
     (function initVentas() {

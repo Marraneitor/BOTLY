@@ -543,6 +543,96 @@ app.delete('/api/messages', authMiddleware, async (req, res) => {
 });
 
 // ══════════════════════════════════════════════════════════
+//  ACCOUNT STATS — aggregated user dashboard
+// ══════════════════════════════════════════════════════════
+
+app.get('/api/account/stats', authMiddleware, async (req, res) => {
+    try {
+        const uid = req.uid;
+        const config = await loadUserConfig(uid);
+        const msgs = await loadMessages(uid);
+        const sales = await loadSalesResults(uid);
+        const bot = userBots.get(uid);
+
+        // Count conversations (unique contacts)
+        const contacts = new Set();
+        let totalIncoming = 0;
+        let totalOutgoing = 0;
+        let todayIncoming = 0;
+        let todayOutgoing = 0;
+        const todayStr = new Date().toISOString().slice(0, 10);
+
+        msgs.forEach(m => {
+            contacts.add(m.from);
+            if (m.direction === 'incoming') {
+                totalIncoming++;
+                if (m.timestamp && m.timestamp.startsWith(todayStr)) todayIncoming++;
+            } else {
+                totalOutgoing++;
+                if (m.timestamp && m.timestamp.startsWith(todayStr)) todayOutgoing++;
+            }
+        });
+
+        // Sales stats
+        let completedSales = 0;
+        let abandonedCarts = 0;
+        let leads = 0;
+        let appointments = 0;
+        let totalRevenue = 0;
+
+        if (Array.isArray(sales)) {
+            sales.forEach(s => {
+                if (s.type === 'sale') { completedSales++; totalRevenue += (s.amount || 0); }
+                else if (s.type === 'abandoned') abandonedCarts++;
+                else if (s.type === 'lead') leads++;
+                else if (s.type === 'appointment') appointments++;
+            });
+        }
+
+        // Subscription info
+        const sub = config.subscription || null;
+
+        res.json({
+            ok: true,
+            data: {
+                user: {
+                    name: config.businessName || req.email,
+                    email: req.email,
+                    createdAt: config.createdAt || null
+                },
+                subscription: sub ? {
+                    plan: sub.planId || 'trial',
+                    isTrial: sub.isTrial || false,
+                    expiresAt: sub.expiresAt || null,
+                    active: sub.expiresAt ? new Date(sub.expiresAt) > new Date() : false
+                } : null,
+                bot: {
+                    status: bot ? bot.status : 'off',
+                    paused: bot?.paused || false
+                },
+                messages: {
+                    totalIncoming,
+                    totalOutgoing,
+                    todayIncoming,
+                    todayOutgoing,
+                    totalConversations: contacts.size
+                },
+                sales: {
+                    completed: completedSales,
+                    abandoned: abandonedCarts,
+                    leads,
+                    appointments,
+                    totalRevenue
+                }
+            }
+        });
+    } catch (err) {
+        console.error('[Account] Stats error:', err);
+        res.status(500).json({ error: 'Error al cargar estadísticas' });
+    }
+});
+
+// ══════════════════════════════════════════════════════════
 //  VENTAS (V2) — AI-powered sales analysis & real-time detection
 // ══════════════════════════════════════════════════════════
 
