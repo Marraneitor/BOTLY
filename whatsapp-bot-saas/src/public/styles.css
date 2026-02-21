@@ -587,6 +587,56 @@ body::after {
 .btn--warning:disabled { opacity: .5; pointer-events: none; }
 .btn--warning svg { width: 18px; height: 18px; flex-shrink: 0; }
 
+/* Pause button (amber/yellow) */
+.btn--pause {
+    background: rgba(251,191,36,.08);
+    color: #fbbf24;
+    border: 1px solid rgba(251,191,36,.2);
+    display: inline-flex; align-items: center; gap: .5rem;
+    padding: .65rem 1.3rem;
+    font-size: .88rem; font-weight: 600;
+    border-radius: var(--radius-sm);
+    cursor: pointer;
+    font-family: inherit;
+    transition: all var(--t-base);
+}
+.btn--pause:hover {
+    background: rgba(251,191,36,.15);
+    border-color: rgba(251,191,36,.35);
+    box-shadow: 0 0 20px rgba(251,191,36,.15);
+    transform: translateY(-1px);
+}
+.btn--pause:disabled { opacity: .5; pointer-events: none; }
+.btn--pause svg { width: 18px; height: 18px; flex-shrink: 0; }
+
+/* Pause info banner */
+.pause-banner {
+    display: flex;
+    align-items: center;
+    gap: .65rem;
+    padding: .75rem 1rem;
+    margin-top: 1rem;
+    background: rgba(251,191,36,.06);
+    border: 1px solid rgba(251,191,36,.2);
+    border-radius: var(--radius-sm);
+    color: #fbbf24;
+    font-size: .85rem;
+    animation: fadeIn .3s ease;
+}
+.pause-banner svg { flex-shrink: 0; color: #fbbf24; }
+.pause-banner--hidden { display: none; }
+
+/* Paused status dot (amber pulse) */
+.status-dot--paused {
+    background: #fbbf24;
+    box-shadow: 0 0 8px rgba(251,191,36,.4);
+    animation: pausePulse 2s ease-in-out infinite;
+}
+@keyframes pausePulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: .4; }
+}
+
 .btn--lg {
     padding: .8rem 1.8rem; font-size: .92rem;
     border-radius: 12px;

@@ -368,6 +368,7 @@ app.get('/api/bot/status', authMiddleware, (req, res) => {
     res.json({
         ok: true,
         status: bot ? bot.status : 'off',
+        paused: bot?.paused || false,
         qrPending: bot?.status === 'qr',
         stats: bot?.stats || { messagesToday: 0, contactsCount: 0 }
     });
@@ -409,8 +410,36 @@ app.post('/api/bot/start', authMiddleware, async (req, res) => {
 app.post('/api/bot/stop', authMiddleware, async (req, res) => {
     await stopBot(req.uid);
     // Clear persistent flag so bot doesn't auto-restart on server reboot
-    await saveUserConfig(req.uid, { botActive: false });
+    await saveUserConfig(req.uid, { botActive: false, botPaused: false });
     res.json({ ok: true, message: 'Bot detenido.' });
+});
+
+// Pause bot globally — keeps WhatsApp connection alive, stops responding to messages
+app.post('/api/bot/pause', authMiddleware, async (req, res) => {
+    const bot = userBots.get(req.uid);
+    if (!bot || bot.status !== 'connected') {
+        return res.status(400).json({ error: 'El bot no está conectado.' });
+    }
+    bot.paused = true;
+    await saveUserConfig(req.uid, { botPaused: true });
+    const room = `user_${req.uid}`;
+    io.to(room).emit('bot_paused', true);
+    console.log(`[Bot][${req.email}] ⏸ Bot PAUSED globally (connection alive)`);
+    res.json({ ok: true, paused: true, message: 'Bot pausado. La conexión sigue activa.' });
+});
+
+// Resume bot — re-enable auto-replies
+app.post('/api/bot/resume', authMiddleware, async (req, res) => {
+    const bot = userBots.get(req.uid);
+    if (!bot || bot.status !== 'connected') {
+        return res.status(400).json({ error: 'El bot no está conectado.' });
+    }
+    bot.paused = false;
+    await saveUserConfig(req.uid, { botPaused: false });
+    const room = `user_${req.uid}`;
+    io.to(room).emit('bot_paused', false);
+    console.log(`[Bot][${req.email}] ▶ Bot RESUMED`);
+    res.json({ ok: true, paused: false, message: 'Bot reanudado.' });
 });
 
 // Reset session — destroy client, wipe auth folder, restart for new QR
@@ -1598,12 +1627,17 @@ async function startBot(uid, email) {
         } catch(e) { /* ignore */ }
     }
 
+    // Load persisted pause state
+    const savedConfig = await loadUserConfig(uid);
+    const wasPaused = savedConfig.botPaused || false;
+
     const botState = {
         sock: null,
         status: 'starting',
         lastQR: null,
         stats: { messagesToday: 0, contactsCount: 0 },
-        retryCount: 0
+        retryCount: 0,
+        paused: wasPaused
     };
     userBots.set(uid, botState);
 
@@ -1664,8 +1698,12 @@ async function startBot(uid, email) {
             botState.lastQR = null;
             botState.retryCount = 0;
             const phoneNumber = sock.user?.id?.split(':')[0] || sock.user?.id || 'unknown';
-            console.log(`[Bot] Connected for ${email} — ${phoneNumber}`);
+            console.log(`[Bot] Connected for ${email} — ${phoneNumber}${botState.paused ? ' (PAUSED)' : ''}`);
             io.to(room).emit('ready');
+            // Notify client of paused state on reconnection
+            if (botState.paused) {
+                io.to(room).emit('bot_paused', true);
+            }
             // Start scheduled message timers
             restartScheduledTimers(uid);
         }
@@ -1740,6 +1778,30 @@ async function startBot(uid, email) {
                         });
                         return;
                     }
+                }
+
+                // Check if bot is globally paused — early exit before filters/AI
+                // We compute phone/senderName first so we can still save the message
+                if (botState.paused) {
+                    const pausePhone = isGroup ? jid : jid.replace('@s.whatsapp.net', '');
+                    const pauseSender = isGroup
+                        ? (msg.pushName || msg.key.participant?.replace('@s.whatsapp.net', '') || jid)
+                        : (msg.pushName || pausePhone);
+                    const incomingMsgP = {
+                        id: msgId,
+                        from: pausePhone,
+                        senderName: pauseSender,
+                        body: text,
+                        direction: 'incoming',
+                        timestamp: new Date().toISOString(),
+                        isGroup: isGroup
+                    };
+                    await saveMessage(uid, incomingMsgP);
+                    io.to(room).emit('new_message', incomingMsgP);
+                    botState.stats.messagesToday++;
+                    io.to(room).emit('stats', botState.stats);
+                    console.log(`[Bot][${email}] ⏸ Bot PAUSED — saved message from ${pausePhone}, no auto-reply`);
+                    continue;
                 }
 
                 // Load this user's config (once)

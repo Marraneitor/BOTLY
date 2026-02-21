@@ -95,11 +95,14 @@
     var statusText   = $('#status-text');
     var btnStartBot  = $('#btn-start-bot');
     var btnStopBot   = $('#btn-stop-bot');
+    var btnPauseBot  = $('#btn-pause-bot');
+    var pauseBanner  = $('#pause-banner');
     var btnResetDraft = $('#btn-reset-draft');
 
     // --- State ---
     var socket = null;
     var botConnected = false;
+    var botPaused = false;
 
     // --- Navigation ---
     var bottomNavTabs = $$('.bottom-nav__tab');
@@ -346,6 +349,11 @@
             showToast('Bot desconectado: ' + (reason || 'desconocido'), 'error');
         });
 
+        // Global pause state from server
+        socket.on('bot_paused', function(paused) {
+            setBotPausedState(paused);
+        });
+
         socket.on('stats', function(data) {
             if (data.messagesToday != null) {
                 var el = $('#messages-today');
@@ -436,15 +444,55 @@
     function setConnectionStatus(connected) {
         botConnected = connected;
         if (connDot) connDot.className = connected ? 'status-dot status-dot--on' : 'status-dot status-dot--off';
-        if (connLabel) connLabel.textContent = connected ? 'Conectado' : 'Desconectado';
+        if (connLabel) connLabel.textContent = connected ? (botPaused ? 'Conectado (Pausado)' : 'Conectado') : 'Desconectado';
         if (statusIcon) statusIcon.className = connected ? 'card__icon card__icon--connected' : 'card__icon card__icon--disconnected';
-        if (statusText) statusText.textContent = connected ? 'Conectado' : 'Desconectado';
+        if (statusText) statusText.textContent = connected ? (botPaused ? 'Pausado' : 'Conectado') : 'Desconectado';
         if (btnStartBot) btnStartBot.disabled = connected;
         if (btnStopBot) btnStopBot.disabled = !connected;
+        if (btnPauseBot) btnPauseBot.disabled = !connected;
+        updatePauseBtnUI();
         if (connected && qrCanvas) {
             qrCanvas.classList.add('qr-canvas--hidden');
             qrPlaceholder.style.display = 'flex';
             qrPlaceholder.querySelector('p').textContent = 'Bot vinculado correctamente!';
+        }
+        if (!connected) {
+            setBotPausedState(false);
+        }
+    }
+
+    function setBotPausedState(paused) {
+        botPaused = paused;
+        updatePauseBtnUI();
+        if (pauseBanner) {
+            pauseBanner.classList.toggle('pause-banner--hidden', !paused);
+        }
+        // Update connection label
+        if (botConnected) {
+            if (connLabel) connLabel.textContent = paused ? 'Conectado (Pausado)' : 'Conectado';
+            if (statusText) statusText.textContent = paused ? 'Pausado' : 'Conectado';
+            if (connDot) {
+                connDot.className = paused ? 'status-dot status-dot--paused' : 'status-dot status-dot--on';
+            }
+        }
+    }
+
+    function updatePauseBtnUI() {
+        if (!btnPauseBot) return;
+        if (botPaused) {
+            btnPauseBot.innerHTML =
+                '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">' +
+                '<polygon points="5 3 19 12 5 21 5 3"/>' +
+                '</svg> Reanudar Bot';
+            btnPauseBot.classList.remove('btn--pause');
+            btnPauseBot.classList.add('btn--success');
+        } else {
+            btnPauseBot.innerHTML =
+                '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">' +
+                '<rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/>' +
+                '</svg> Pausar Bot';
+            btnPauseBot.classList.remove('btn--success');
+            btnPauseBot.classList.add('btn--pause');
         }
     }
 
@@ -482,6 +530,26 @@
                 showToast(err.message || 'Error al detener', 'error');
             }).finally(function() {
                 btnStopBot.disabled = !botConnected;
+            });
+        });
+    }
+
+    // --- Pause / Resume Bot (keeps WhatsApp connection alive) ---
+    if (btnPauseBot) {
+        btnPauseBot.addEventListener('click', function() {
+            var endpoint = botPaused ? '/bot/resume' : '/bot/pause';
+            var action = botPaused ? 'Reanudando...' : 'Pausando...';
+            btnPauseBot.disabled = true;
+            btnPauseBot.textContent = action;
+
+            apiCall(endpoint, { method: 'POST' }).then(function(data) {
+                setBotPausedState(data.paused);
+                showToast(data.paused ? 'Bot pausado — conexión activa' : 'Bot reanudado');
+            }).catch(function(err) {
+                showToast(err.message || 'Error', 'error');
+            }).finally(function() {
+                btnPauseBot.disabled = !botConnected;
+                updatePauseBtnUI();
             });
         });
     }
@@ -1212,6 +1280,10 @@
             if (res.status === 'connected') {
                 initSocket();
                 setConnectionStatus(true);
+                // Restore pause state
+                if (res.paused) {
+                    setBotPausedState(true);
+                }
             } else if (res.status === 'qr') {
                 initSocket();
                 navigateTo('connection');
