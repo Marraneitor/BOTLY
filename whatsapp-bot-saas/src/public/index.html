@@ -234,10 +234,6 @@
                             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="5 3 19 12 5 21 5 3"/></svg>
                             Iniciar Bot
                         </button>
-                        <button class="btn btn--pause" id="btn-pause-bot" disabled>
-                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/></svg>
-                            Pausar Bot
-                        </button>
                         <button class="btn btn--danger" id="btn-stop-bot" disabled>
                             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="6" y="6" width="12" height="12"/></svg>
                             Detener Bot
@@ -246,12 +242,6 @@
                             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M23 4v6h-6"/><path d="M1 20v-6h6"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
                             Formatear dispositivos (nuevo QR)
                         </button>
-                    </div>
-
-                    <!-- Pause info banner -->
-                    <div class="pause-banner pause-banner--hidden" id="pause-banner">
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="20" height="20"><rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/></svg>
-                        <span>El bot está <strong>pausado</strong> — los mensajes se reciben pero no se responden automáticamente.</span>
                     </div>
                 </div>
             </div>
@@ -278,6 +268,13 @@
 
             <!-- ═══ TAB: INBOX (Conversaciones) ═══ -->
             <div class="msg-tab-content msg-tab-content--active" id="msg-tab-inbox">
+
+                <!-- Pause banner (global bot pause) -->
+                <div class="pause-banner pause-banner--hidden" id="pause-banner">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="20" height="20"><rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/></svg>
+                    <span>El bot está <strong>pausado</strong> — los mensajes se reciben pero no se responden automáticamente.</span>
+                </div>
+
                 <div id="inbox-view">
                     <div class="inbox-header">
                         <div class="inbox-header__left">
@@ -288,6 +285,11 @@
                             <span class="inbox-header__count" id="inbox-count">0 chats</span>
                         </div>
                         <div class="inbox-header__actions">
+                            <!-- Pause/Resume bot toggle -->
+                            <button class="btn btn--pause btn--sm" id="btn-pause-bot" disabled title="Pausar bot">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16"><rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/></svg>
+                                <span id="pause-bot-label">Pausar</span>
+                            </button>
                             <!-- Response mode toggle -->
                             <div class="response-mode-toggle" id="response-mode-toggle">
                                 <span class="response-mode-label" id="response-mode-label">Automático</span>
