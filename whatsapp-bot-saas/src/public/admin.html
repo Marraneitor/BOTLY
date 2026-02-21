@@ -209,6 +209,26 @@
         </div>
     </main>
 
+    <!-- Mobile Bottom Nav (Admin) -->
+    <nav class="admin-mobile-nav" aria-label="Admin mobile navigation">
+        <button class="admin-mobile-nav__tab admin-mobile-nav__tab--active" data-section="overview">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>
+            <span>Resumen</span>
+        </button>
+        <button class="admin-mobile-nav__tab" data-section="users">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+            <span>Usuarios</span>
+        </button>
+        <button class="admin-mobile-nav__tab" data-section="revenue">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
+            <span>Ingresos</span>
+        </button>
+        <a class="admin-mobile-nav__tab" href="/">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 18l-6-6 6-6"/></svg>
+            <span>Dashboard</span>
+        </a>
+    </nav>
+
     <!-- Action modal -->
     <div class="admin-modal-overlay" id="modal-overlay" style="display:none;">
         <div class="admin-modal">

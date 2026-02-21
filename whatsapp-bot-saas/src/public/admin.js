@@ -485,6 +485,8 @@
 
     // ─── Sidebar Navigation (using inline style for reliability) ──
     var navLinks = document.querySelectorAll('.sidebar__link[data-section]');
+    var mobileNavTabs = document.querySelectorAll('.admin-mobile-nav__tab[data-section]');
+
     for (var nl = 0; nl < navLinks.length; nl++) {
         navLinks[nl].addEventListener('click', function (e) {
             e.preventDefault();
@@ -494,8 +496,34 @@
             for (var x = 0; x < navLinks.length; x++) navLinks[x].classList.remove('sidebar__link--active');
             this.classList.add('sidebar__link--active');
 
+            // Update mobile nav active
+            for (var mt = 0; mt < mobileNavTabs.length; mt++) {
+                mobileNavTabs[mt].classList.toggle('admin-mobile-nav__tab--active', mobileNavTabs[mt].getAttribute('data-section') === sec);
+            }
+
             // Toggle sections using inline style (more reliable than class toggle)
             showSection(sec);
+        });
+    }
+
+    // ─── Mobile Bottom Nav ───
+    for (var mn = 0; mn < mobileNavTabs.length; mn++) {
+        mobileNavTabs[mn].addEventListener('click', function (e) {
+            e.preventDefault();
+            var sec = this.getAttribute('data-section');
+            if (!sec) return;
+
+            // Update mobile nav active
+            for (var mt = 0; mt < mobileNavTabs.length; mt++) mobileNavTabs[mt].classList.remove('admin-mobile-nav__tab--active');
+            this.classList.add('admin-mobile-nav__tab--active');
+
+            // Update sidebar active
+            for (var x = 0; x < navLinks.length; x++) {
+                navLinks[x].classList.toggle('sidebar__link--active', navLinks[x].getAttribute('data-section') === sec);
+            }
+
+            showSection(sec);
+            window.scrollTo({ top: 0, behavior: 'smooth' });
         });
     }
 

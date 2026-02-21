@@ -360,6 +360,22 @@ body::after {
     transition: var(--t-base);
 }
 
+/* Sidebar overlay (mobile — dim background when sidebar is open) */
+.sidebar-overlay {
+    display: none;
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,0.5);
+    z-index: 99;
+    opacity: 0;
+    transition: opacity .3s var(--ease-out);
+    -webkit-tap-highlight-color: transparent;
+}
+.sidebar-overlay--visible {
+    display: block;
+    opacity: 1;
+}
+
 /* ============================================================
    MAIN CONTENT
    ============================================================ */
@@ -2210,9 +2226,47 @@ select.form__input option:checked {
 
 /* Auth responsive */
 @media (max-width: 480px) {
-    .auth-card { padding: 1.65rem; }
+    .auth-card {
+        padding: 1.65rem;
+        border-radius: var(--radius-lg);
+        margin-bottom: 1rem;
+    }
     .auth-brand__name { font-size: 1.8rem; }
     .auth-features { flex-direction: column; align-items: center; gap: .75rem; }
+
+    /* Enhanced mobile input touch targets */
+    .auth-form__input {
+        padding: .85rem 1rem .85rem 2.75rem;
+        font-size: .95rem;
+        border-radius: var(--radius-sm);
+    }
+    .auth-form__input-wrap:focus-within {
+        box-shadow: 0 0 0 3px rgba(16,185,129,.15);
+        border-radius: var(--radius-sm);
+    }
+    .auth-form__label {
+        font-size: .82rem;
+        font-weight: 600;
+    }
+
+    /* Larger submit button */
+    .auth-card .btn--block {
+        padding: .9rem 1rem;
+        font-size: .95rem;
+        border-radius: var(--radius);
+    }
+    .auth-card .btn--google {
+        padding: .8rem 1rem;
+        border-radius: var(--radius);
+    }
+
+    /* App-feel back button */
+    .auth-back {
+        font-size: .85rem;
+        padding: .5rem .75rem;
+        border-radius: var(--radius-sm);
+        backdrop-filter: blur(8px);
+    }
 }
 
 /* Spinner utility */
@@ -3467,5 +3521,692 @@ select.form__input option:checked {
 @media (max-width: 480px) {
     .admin-kpi-row {
         grid-template-columns: 1fr;
+    }
+}
+
+/* ============================================================
+   PERFORMANCE & MOBILE OPTIMIZATIONS
+   ============================================================ */
+
+/* ── GPU-accelerated animations (avoid layout thrashing) ── */
+.sidebar,
+.hamburger,
+.toast,
+.section,
+.card,
+.modal,
+.trial-modal,
+.admin-modal {
+    will-change: transform, opacity;
+}
+
+/* ── Content visibility: skip rendering off-screen sections ── */
+.section--hidden {
+    content-visibility: hidden;
+    contain-intrinsic-size: 0 500px;
+}
+
+/* ── Reduce motion for users who prefer it ── */
+@media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after {
+        animation-duration: 0.01ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 0.01ms !important;
+        scroll-behavior: auto !important;
+    }
+}
+
+/* ── Touch-friendly targets (min 44px per Apple/Google guidelines) ── */
+@media (pointer: coarse) {
+    .sidebar__link {
+        min-height: 48px;
+        padding: .7rem 1rem;
+    }
+    .btn, button, [role="button"] {
+        min-height: 44px;
+        min-width: 44px;
+    }
+    .form__input, .form__select, .form__textarea,
+    .auth-form__input, textarea, select, input[type="text"],
+    input[type="email"], input[type="password"],
+    input[type="time"], input[type="number"] {
+        min-height: 44px;
+        font-size: 16px !important; /* prevents iOS zoom on focus */
+    }
+    .msg-tab {
+        min-height: 44px;
+    }
+    .hamburger {
+        width: 44px;
+        height: 44px;
+    }
+    .inbox-item {
+        min-height: 60px;
+    }
+    .chat-input-bar input {
+        min-height: 44px;
+        font-size: 16px !important;
+    }
+}
+
+/* ── Safe area insets for notched phones (iPhone X+, etc.) ── */
+@supports (padding: env(safe-area-inset-bottom)) {
+    .sidebar {
+        padding-bottom: calc(1rem + env(safe-area-inset-bottom));
+    }
+    .main {
+        padding-bottom: calc(2rem + env(safe-area-inset-bottom));
+    }
+    .chat-input-bar {
+        padding-bottom: calc(.5rem + env(safe-area-inset-bottom));
+    }
+}
+
+/* ── Improved 768px mobile layout ── */
+@media (max-width: 768px) {
+    /* Prevent body scroll when sidebar is open */
+    body.sidebar-open {
+        overflow: hidden;
+        position: fixed;
+        width: 100%;
+    }
+
+    .sidebar--open {
+        box-shadow: 8px 0 40px rgba(0,0,0,.6);
+    }
+
+    /* Better section title sizing on mobile */
+    .section__title {
+        font-size: 1.4rem;
+    }
+    .section__subtitle {
+        font-size: .85rem;
+    }
+
+    /* Full-width cards on mobile */
+    .quick-actions {
+        flex-direction: column;
+    }
+    .quick-actions .btn {
+        width: 100%;
+    }
+
+    /* Schedule grid mobile-friendly */
+    .schedule-row {
+        flex-wrap: wrap;
+    }
+}
+
+/* ── Extra-small screens ── */
+@media (max-width: 380px) {
+    .main {
+        padding: 1rem .75rem;
+        padding-top: 4rem;
+    }
+    .section__title {
+        font-size: 1.2rem;
+    }
+    .card__value {
+        font-size: 1.3rem;
+    }
+    .btn {
+        font-size: .82rem;
+        padding: .55rem .9rem;
+    }
+    .schedule-row__day {
+        width: 60px;
+        font-size: .72rem;
+    }
+    .form__input--sm {
+        max-width: 80px;
+    }
+}
+
+/* ── Smooth text rendering on all platforms ── */
+* {
+    -webkit-tap-highlight-color: transparent;
+    -webkit-touch-callout: none;
+}
+
+/* ── Active state feedback for touch ── */
+@media (pointer: coarse) {
+    .btn:active,
+    .sidebar__link:active,
+    .card:active,
+    .inbox-item:active {
+        transform: scale(0.97);
+        transition: transform 0.1s ease;
+    }
+}
+
+/* ── Optimize images ── */
+img {
+    max-width: 100%;
+    height: auto;
+    content-visibility: auto;
+}
+
+/* ── Print styles (hide interactive elements) ── */
+@media print {
+    .sidebar, .hamburger, .toast, .btn,
+    .chat-input-bar, .quick-actions, .bottom-nav {
+        display: none !important;
+    }
+    .main { margin-left: 0; }
+    body { background: white; color: black; }
+}
+
+/* ============================================================
+   MOBILE BOTTOM TAB BAR (App-like navigation)
+   ============================================================ */
+.bottom-nav {
+    display: none;
+    position: fixed;
+    bottom: 0; left: 0; right: 0;
+    z-index: 200;
+    background: rgba(10, 10, 18, 0.92);
+    backdrop-filter: blur(24px) saturate(1.5);
+    -webkit-backdrop-filter: blur(24px) saturate(1.5);
+    border-top: 1px solid var(--border-subtle);
+    padding: .35rem .5rem calc(.35rem + env(safe-area-inset-bottom, 0px));
+    justify-content: space-around;
+    align-items: flex-end;
+    gap: 0;
+    box-shadow: 0 -4px 24px rgba(0,0,0,.4);
+}
+
+.bottom-nav__tab {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 2px;
+    padding: .35rem .25rem;
+    background: none;
+    border: none;
+    color: var(--text-muted);
+    font-size: .62rem;
+    font-weight: 500;
+    font-family: inherit;
+    cursor: pointer;
+    transition: all .2s var(--ease-out);
+    position: relative;
+    flex: 1;
+    min-width: 0;
+    -webkit-tap-highlight-color: transparent;
+    letter-spacing: .01em;
+}
+.bottom-nav__tab svg {
+    width: 22px;
+    height: 22px;
+    stroke-width: 1.8;
+    transition: all .2s var(--ease-out);
+}
+.bottom-nav__tab span {
+    display: block;
+    line-height: 1.1;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 64px;
+}
+
+/* Active state */
+.bottom-nav__tab--active {
+    color: var(--accent-light);
+}
+.bottom-nav__tab--active svg {
+    color: var(--accent);
+    filter: drop-shadow(0 0 6px rgba(16,185,129,.3));
+}
+/* Active indicator dot */
+.bottom-nav__tab--active::before {
+    content: '';
+    position: absolute;
+    top: -1px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 20px;
+    height: 3px;
+    background: linear-gradient(90deg, var(--accent-light), var(--accent));
+    border-radius: 0 0 4px 4px;
+    box-shadow: 0 2px 8px rgba(16,185,129,.3);
+}
+
+/* FAB (center floating button) */
+.bottom-nav__tab--fab {
+    padding-top: 0;
+    margin-top: -18px;
+}
+.bottom-nav__fab-ring {
+    width: 52px;
+    height: 52px;
+    border-radius: 50%;
+    background: linear-gradient(135deg, var(--accent), var(--accent-dark));
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: 0 4px 20px rgba(16,185,129,.35), 0 0 0 4px var(--bg-base);
+    transition: all .25s var(--ease-spring);
+    margin-bottom: 2px;
+}
+.bottom-nav__tab--fab svg {
+    color: #fff;
+    width: 24px;
+    height: 24px;
+}
+.bottom-nav__tab--fab.bottom-nav__tab--active .bottom-nav__fab-ring {
+    box-shadow: 0 4px 24px rgba(16,185,129,.5), 0 0 0 4px var(--bg-base), 0 0 40px rgba(16,185,129,.15);
+    transform: scale(1.05);
+}
+.bottom-nav__tab--fab:active .bottom-nav__fab-ring {
+    transform: scale(0.92);
+}
+.bottom-nav__tab--fab::before {
+    display: none; /* No indicator dot for FAB */
+}
+
+/* Bottom nav haptic effect */
+.bottom-nav__tab:active {
+    transform: scale(0.9);
+}
+.bottom-nav__tab--fab:active {
+    transform: none; /* FAB ring handles its own scale */
+}
+
+@media (max-width: 768px) {
+    .bottom-nav {
+        display: flex;
+    }
+    /* Hide hamburger when bottom nav is shown */
+    .hamburger {
+        display: none !important;
+    }
+    /* Adjust main content for bottom nav */
+    .main {
+        padding-top: 1.5rem;
+        padding-bottom: calc(5rem + env(safe-area-inset-bottom, 0px));
+    }
+    /* Adjust trial banner for bottom nav */
+    .trial-banner {
+        bottom: calc(4.5rem + env(safe-area-inset-bottom, 0px));
+    }
+    /* Adjust toast for bottom nav */
+    .toast {
+        bottom: calc(5.5rem + env(safe-area-inset-bottom, 0px));
+    }
+    /* Chat view should account for bottom nav */
+    .chat-view {
+        height: calc(100vh - 5rem - env(safe-area-inset-bottom, 0px));
+    }
+}
+
+/* ============================================================
+   APP-LIKE PAGE TRANSITIONS
+   ============================================================ */
+@keyframes pageSlideIn {
+    from {
+        opacity: 0;
+        transform: translateX(12px);
+    }
+    to {
+        opacity: 1;
+        transform: translateX(0);
+    }
+}
+@keyframes pageSlideOut {
+    from {
+        opacity: 1;
+        transform: translateX(0);
+    }
+    to {
+        opacity: 0;
+        transform: translateX(-12px);
+    }
+}
+@keyframes pageFadeScale {
+    from {
+        opacity: 0;
+        transform: scale(0.97);
+    }
+    to {
+        opacity: 1;
+        transform: scale(1);
+    }
+}
+
+.section {
+    animation: pageFadeScale .35s var(--ease-out) both;
+}
+
+/* ============================================================
+   ENHANCED CARD MICRO-INTERACTIONS (App-like)
+   ============================================================ */
+@media (pointer: coarse) {
+    .card {
+        transition: transform .15s ease, box-shadow .15s ease;
+    }
+    .card:active {
+        transform: scale(0.97) !important;
+        box-shadow: none !important;
+    }
+    .inbox-item {
+        transition: transform .12s ease, background .12s ease;
+    }
+    .inbox-item:active {
+        transform: scale(0.98) !important;
+        background: rgba(16,185,129,.06);
+    }
+    .plan-card:active {
+        transform: scale(0.97) !important;
+    }
+    .plan-card--popular:active {
+        transform: scale(0.99) !important;
+    }
+}
+
+/* ============================================================
+   MODAL SHEET SYSTEM (Mobile slide-up modals)
+   ============================================================ */
+.modal-sheet-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 9998;
+    background: rgba(0,0,0,.55);
+    backdrop-filter: blur(4px);
+    opacity: 0;
+    visibility: hidden;
+    transition: all .3s var(--ease-out);
+}
+.modal-sheet-overlay--visible {
+    opacity: 1;
+    visibility: visible;
+}
+
+.modal-sheet {
+    position: fixed;
+    bottom: 0; left: 0; right: 0;
+    z-index: 9999;
+    background: var(--bg-elevated);
+    border-radius: var(--radius-xl) var(--radius-xl) 0 0;
+    border-top: 1px solid var(--border-default);
+    max-height: 92vh;
+    overflow-y: auto;
+    padding: 0 1.25rem 1.5rem;
+    padding-bottom: calc(1.5rem + env(safe-area-inset-bottom, 0px));
+    transform: translateY(100%);
+    transition: transform .35s var(--ease-out);
+    box-shadow: 0 -8px 40px rgba(0,0,0,.5);
+    overscroll-behavior: contain;
+}
+.modal-sheet--visible {
+    transform: translateY(0);
+}
+
+/* Drag handle */
+.modal-sheet__handle {
+    display: flex;
+    justify-content: center;
+    padding: .75rem 0 .5rem;
+    position: sticky;
+    top: 0;
+    background: var(--bg-elevated);
+    z-index: 1;
+}
+.modal-sheet__handle::before {
+    content: '';
+    width: 36px;
+    height: 4px;
+    background: var(--text-faint);
+    border-radius: 999px;
+}
+
+.modal-sheet__header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: .5rem 0 1rem;
+}
+.modal-sheet__title {
+    font-size: 1.1rem;
+    font-weight: 700;
+    color: var(--text-primary);
+}
+.modal-sheet__close {
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    background: rgba(255,255,255,.06);
+    border: 1px solid var(--border-default);
+    color: var(--text-secondary);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: all .15s ease;
+    font-size: 1.1rem;
+}
+.modal-sheet__close:hover {
+    background: rgba(255,255,255,.1);
+    color: var(--text-primary);
+}
+
+/* ============================================================
+   ENHANCED DASHBOARD CARDS (App-like)
+   ============================================================ */
+@media (max-width: 768px) {
+    .cards {
+        grid-template-columns: 1fr;
+        gap: .75rem;
+    }
+    .card {
+        border-radius: var(--radius);
+        padding: 1rem 1.15rem;
+    }
+    /* Compact quick actions on mobile */
+    .quick-actions {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: .6rem;
+    }
+    .quick-actions__title {
+        grid-column: 1 / -1;
+    }
+    .quick-actions .btn {
+        width: 100%;
+        justify-content: center;
+        font-size: .82rem;
+        padding: .7rem .6rem;
+    }
+}
+
+/* ============================================================
+   ENHANCED CONNECTION PANEL (Mobile-first)
+   ============================================================ */
+@media (max-width: 768px) {
+    .connection-panel {
+        grid-template-columns: 1fr;
+        gap: 1.25rem;
+    }
+    .qr-container {
+        max-width: 280px;
+        margin: 0 auto;
+        min-height: 260px;
+        border-radius: var(--radius-lg);
+    }
+    .connection-actions {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: .6rem;
+    }
+    .connection-actions .btn {
+        width: 100%;
+        justify-content: center;
+    }
+    .connection-actions .btn--warning {
+        grid-column: 1 / -1;
+    }
+}
+
+/* ============================================================
+   ENHANCED PLAN CARDS (Mobile swipeable look)
+   ============================================================ */
+@media (max-width: 768px) {
+    .plans-grid {
+        display: flex;
+        overflow-x: auto;
+        scroll-snap-type: x mandatory;
+        scroll-padding: 0 1rem;
+        gap: .85rem;
+        padding-bottom: .5rem;
+        -webkit-overflow-scrolling: touch;
+    }
+    .plans-grid::-webkit-scrollbar {
+        display: none;
+    }
+    .plan-card {
+        min-width: 280px;
+        scroll-snap-align: center;
+        flex-shrink: 0;
+    }
+    .plan-card--popular {
+        transform: none;
+    }
+    .plan-card--popular:hover {
+        transform: translateY(-4px);
+    }
+}
+
+/* ============================================================
+   ENHANCED INBOX (Mobile chat-app feel)
+   ============================================================ */
+@media (max-width: 768px) {
+    .inbox-list {
+        max-height: calc(100vh - 16rem);
+        gap: .3rem;
+    }
+    .inbox-item {
+        padding: .75rem .85rem;
+        border-radius: var(--radius-sm);
+        border: none;
+        border-bottom: 1px solid var(--border-subtle);
+        background: transparent;
+    }
+    .inbox-item:hover {
+        transform: none;
+        box-shadow: none;
+        background: rgba(255,255,255,.03);
+    }
+    .inbox-item:active {
+        background: rgba(16,185,129,.04);
+    }
+    .inbox-item__avatar {
+        width: 48px;
+        height: 48px;
+        font-size: .88rem;
+    }
+
+    /* Full-screen chat view */
+    .chat-view {
+        position: fixed;
+        inset: 0;
+        z-index: 150;
+        background: var(--bg-base);
+        height: 100vh;
+        padding-bottom: env(safe-area-inset-bottom, 0px);
+    }
+    .chat-topbar {
+        border-radius: 0;
+        border: none;
+        border-bottom: 1px solid var(--border-subtle);
+        margin-bottom: 0;
+        padding: .65rem 1rem;
+        position: sticky;
+        top: 0;
+        z-index: 5;
+        background: rgba(5,5,7,.92);
+        backdrop-filter: blur(20px);
+        -webkit-backdrop-filter: blur(20px);
+    }
+    .chat-messages {
+        padding: .65rem .5rem;
+        flex: 1;
+        min-height: 0;
+    }
+    .chat-input-bar {
+        border: none;
+        border-top: 1px solid var(--border-subtle);
+        border-radius: 0;
+        padding: .6rem .75rem;
+        padding-bottom: calc(.6rem + env(safe-area-inset-bottom, 0px));
+        background: rgba(10,10,18,.95);
+        backdrop-filter: blur(20px);
+        -webkit-backdrop-filter: blur(20px);
+        position: sticky;
+        bottom: 0;
+    }
+    /* Hide bottom nav when chat is open */
+    body.chat-open .bottom-nav {
+        transform: translateY(100%);
+        transition: transform .25s var(--ease-out);
+    }
+}
+
+/* ============================================================
+   MOBILE FORM IMPROVEMENTS (Larger touch targets)
+   ============================================================ */
+@media (max-width: 768px) {
+    .form__group {
+        gap: .35rem;
+    }
+    .form__input,
+    .form__textarea {
+        padding: .8rem 1rem;
+        border-radius: var(--radius-sm);
+        font-size: .92rem;
+    }
+    .form__textarea--lg {
+        min-height: 140px;
+    }
+    .form__actions {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: .6rem;
+    }
+    .form__actions .btn--primary {
+        grid-column: 1 / -1;
+    }
+    .form__fieldset {
+        padding: 1rem;
+    }
+    .schedule-row {
+        background: rgba(255,255,255,.02);
+        padding: .6rem;
+        border-radius: var(--radius-sm);
+        border: 1px solid var(--border-subtle);
+        margin-bottom: .25rem;
+    }
+    /* Toggle size increase */
+    .toggle {
+        width: 50px;
+        height: 28px;
+    }
+    .toggle__slider::before {
+        width: 20px;
+        height: 20px;
+    }
+    .toggle input:checked + .toggle__slider::before {
+        transform: translateX(22px);
+    }
+}
+
+/* ============================================================
+   SECTION TITLE MOBILE (App-like header)
+   ============================================================ */
+@media (max-width: 768px) {
+    .section__title {
+        font-size: 1.5rem;
+        font-weight: 800;
+        letter-spacing: -.03em;
     }
 }

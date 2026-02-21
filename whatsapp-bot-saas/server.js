@@ -18,6 +18,7 @@ const fs = require('fs');
 const admin = require('firebase-admin');
 const { getAIResponse } = require('./aiService');
 const Stripe = require('stripe');
+const compression = require('compression');
 
 // ─── Baileys (lightweight WhatsApp library — no Chrome!) ─
 const { default: makeWASocket, useMultiFileAuthState, DisconnectReason, fetchLatestBaileysVersion, makeCacheableSignalKeyStore } = require('@whiskeysockets/baileys');
@@ -155,7 +156,40 @@ app.post('/api/stripe/webhook', express.raw({ type: 'application/json' }), async
 });
 
 app.use(express.json());
-app.use(express.static(path.join(__dirname, 'src', 'public'), { index: false }));
+
+// ─── Performance: Gzip/Brotli compression ───
+app.use(compression({ level: 6, threshold: 1024 }));
+
+// ─── Security headers ───
+app.use((_req, res, next) => {
+    res.setHeader('X-Content-Type-Options', 'nosniff');
+    res.setHeader('X-Frame-Options', 'SAMEORIGIN');
+    res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
+    res.setHeader('Permissions-Policy', 'camera=(), microphone=(), geolocation=()');
+    next();
+});
+
+// ─── Static files with cache headers ───
+app.use(express.static(path.join(__dirname, 'src', 'public'), {
+    index: false,
+    maxAge: '7d',
+    etag: true,
+    lastModified: true,
+    setHeaders(res, filePath) {
+        // HTML files: no cache (always fresh)
+        if (filePath.endsWith('.html')) {
+            res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+        }
+        // CSS/JS: cache 1 day with revalidation
+        else if (filePath.endsWith('.css') || filePath.endsWith('.js')) {
+            res.setHeader('Cache-Control', 'public, max-age=86400, must-revalidate');
+        }
+        // Images: cache 30 days
+        else if (/\.(png|jpg|jpeg|gif|svg|webp|ico)$/i.test(filePath)) {
+            res.setHeader('Cache-Control', 'public, max-age=2592000, immutable');
+        }
+    }
+}));
 
 // ══════════════════════════════════════════════════════════
 //  IN-MEMORY CACHES (avoid repeated network round-trips)
@@ -603,7 +637,7 @@ app.post('/api/ventas/analyze', authMiddleware, async (req, res) => {
 
         const { GoogleGenerativeAI } = require('@google/generative-ai');
         const genAI = new GoogleGenerativeAI(apiKey);
-        const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash-8b' });
+        const model = genAI.getGenerativeModel({ model: 'gemini-2.0-flash' });
 
         const results = [];
 

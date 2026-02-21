@@ -781,8 +781,87 @@
 
 @media (max-width: 768px) {
     .admin-sidebar { display: none; }
-    .admin-main { margin-left: 0; padding: 1rem; }
-    .kpi-grid { grid-template-columns: 1fr; }
-    .admin-toolbar { flex-direction: column; }
-    .admin-toolbar__search { max-width: 100%; }
+    .admin-main {
+        margin-left: 0;
+        padding: 1rem .85rem;
+        padding-bottom: calc(5rem + env(safe-area-inset-bottom, 0px));
+    }
+    .kpi-grid { grid-template-columns: 1fr; gap: .65rem; }
+    .admin-toolbar {
+        flex-direction: column;
+        gap: .65rem;
+    }
+    .admin-toolbar__search {
+        max-width: 100%;
+        position: sticky;
+        top: 0;
+        z-index: 5;
+        background: var(--bg-base);
+        padding: .5rem 0;
+    }
+
+    /* Admin mobile bottom tab bar */
+    .admin-mobile-nav {
+        display: flex;
+        position: fixed;
+        bottom: 0; left: 0; right: 0;
+        z-index: 200;
+        background: rgba(10, 10, 18, 0.92);
+        backdrop-filter: blur(24px) saturate(1.5);
+        -webkit-backdrop-filter: blur(24px) saturate(1.5);
+        border-top: 1px solid var(--border-subtle);
+        padding: .5rem .25rem calc(.5rem + env(safe-area-inset-bottom, 0px));
+        justify-content: space-around;
+        box-shadow: 0 -4px 24px rgba(0,0,0,.4);
+    }
+    .admin-mobile-nav__tab {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 2px;
+        padding: .35rem .5rem;
+        background: none;
+        border: none;
+        color: var(--text-muted);
+        font-size: .62rem;
+        font-weight: 500;
+        font-family: inherit;
+        cursor: pointer;
+        transition: all .2s ease;
+        -webkit-tap-highlight-color: transparent;
+    }
+    .admin-mobile-nav__tab svg {
+        width: 22px;
+        height: 22px;
+        stroke-width: 1.8;
+    }
+    .admin-mobile-nav__tab--active {
+        color: var(--accent-light);
+    }
+    .admin-mobile-nav__tab:active {
+        transform: scale(0.9);
+    }
+
+    /* Responsive tables */
+    .admin-table {
+        display: block;
+        overflow-x: auto;
+        -webkit-overflow-scrolling: touch;
+        border-radius: var(--radius);
+    }
+    .admin-table th,
+    .admin-table td {
+        padding: .6rem .65rem;
+        font-size: .78rem;
+        white-space: nowrap;
+    }
+
+    /* KPI cards app-like touch */
+    .kpi-card {
+        padding: 1rem;
+        border-radius: var(--radius);
+    }
+    .kpi-card:active {
+        transform: scale(0.97);
+    }
 }

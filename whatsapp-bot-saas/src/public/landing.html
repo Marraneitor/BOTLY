@@ -2,8 +2,12 @@
 <html lang="es">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
     <title>Botly — Automatiza tus Ventas en WhatsApp con IA</title>
+    <meta name="color-scheme" content="dark">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="mobile-web-app-capable" content="yes">
     <meta name="description" content="Crea chatbots inteligentes para WhatsApp en minutos. Gestiona pedidos, calcula envíos y responde dudas. Prueba gratis 1 día.">
     <meta name="keywords" content="chatbot whatsapp, bot whatsapp, automatizar whatsapp, bot ventas, whatsapp business bot, botly">
     <meta property="og:title" content="Botly — Automatiza tus Ventas en WhatsApp con IA">
@@ -123,8 +127,11 @@
         ]
     }
     </script>
+    <link rel="dns-prefetch" href="https://fonts.gstatic.com">
     <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" media="print" onload="this.media='all'">
+    <link rel="manifest" href="./manifest.json">
     <link rel="stylesheet" href="./landing.css">
 </head>
 <body>
@@ -133,7 +140,7 @@
     ═══════════════════════════════════════ -->
     <div class="preloader" id="preloader">
         <div class="preloader__spinner">
-            <img src="./images/logo.png" alt="" class="preloader__logo">
+            <img src="./images/logo.png" alt="" class="preloader__logo" width="32" height="32">
             <div class="preloader__ring"></div>
         </div>
     </div>
@@ -657,6 +664,17 @@
     </footer>
 
     <!-- ═══════════════════════════════════════
+         MOBILE STICKY CTA BAR
+    ═══════════════════════════════════════ -->
+    <div class="mobile-cta-bar">
+        <a href="/auth.html#register" class="mobile-cta-bar__btn">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg>
+            Prueba 1 día GRATIS
+        </a>
+        <a href="#pricing" class="mobile-cta-bar__link">Ver planes</a>
+    </div>
+
+    <!-- ═══════════════════════════════════════
          FLOATING WHATSAPP BUTTON
     ═══════════════════════════════════════ -->
     <a href="https://wa.me/5219221393994?text=Hola%2C%20quiero%20saber%20más%20sobre%20Botly" 
@@ -667,5 +685,6 @@
     </a>
 
     <script src="./landing.js"></script>
+    <script>if('serviceWorker' in navigator){navigator.serviceWorker.register('/sw.js').catch(()=>{});}</script>
 </body>
 </html>

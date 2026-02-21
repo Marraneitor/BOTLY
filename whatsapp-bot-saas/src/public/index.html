@@ -2,21 +2,36 @@
 <html lang="es">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <meta name="theme-color" content="#050507">
+    <meta name="color-scheme" content="dark">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="mobile-web-app-capable" content="yes">
     <title>Botly — Dashboard</title>
     <link rel="icon" type="image/png" href="./images/logo.png">
-    <link rel="stylesheet" href="./styles.css">
-    <!-- Socket.io client (CDN — only used when backend is running) -->
-    <script src="https://cdn.socket.io/4.7.5/socket.io.min.js" defer crossorigin="anonymous"></script>
-    <!-- QRCode.js for rendering QR codes on a canvas -->
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js" defer crossorigin="anonymous"></script>
-    <!-- Firebase Auth SDK (needed for signOut on logout) -->
-    <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
-    <script src="./client.js" defer></script>
-    <!-- Google Fonts – Inter -->
+    <!-- DNS prefetch for external resources -->
+    <link rel="dns-prefetch" href="https://cdn.socket.io">
+    <link rel="dns-prefetch" href="https://cdnjs.cloudflare.com">
+    <link rel="dns-prefetch" href="https://www.gstatic.com">
+    <link rel="dns-prefetch" href="https://fonts.googleapis.com">
+    <link rel="dns-prefetch" href="https://fonts.gstatic.com">
     <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link rel="manifest" href="./manifest.json">
+    <!-- Critical CSS inline for faster FCP -->
+    <link rel="stylesheet" href="./styles.css">
+    <!-- Google Fonts – Inter (swap for fast text render) -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" media="print" onload="this.media='all'">
+    <!-- Socket.io client (deferred — not needed for initial render) -->
+    <script src="https://cdn.socket.io/4.7.5/socket.io.min.js" defer crossorigin="anonymous"></script>
+    <!-- QRCode.js (deferred — only used when QR section is shown) -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js" defer crossorigin="anonymous"></script>
+    <!-- Firebase Auth SDK (deferred) -->
+    <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js" defer></script>
+    <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js" defer></script>
+    <script src="./client.js" defer></script>
+    <script>if('serviceWorker' in navigator){window.addEventListener('load',()=>{navigator.serviceWorker.register('/sw.js').catch(()=>{});});}</script>
 </head>
 <body>
     <!-- ========== SIDEBAR ========== -->
@@ -65,6 +80,9 @@
             </button>
         </div>
     </aside>
+
+    <!-- Mobile sidebar overlay (click to close) -->
+    <div class="sidebar-overlay" id="sidebar-overlay"></div>
 
     <!-- Mobile hamburger -->
     <button class="hamburger" id="hamburger" aria-label="Abrir menú">
@@ -880,5 +898,31 @@
         <span id="trial-banner-text">🎁 Prueba gratuita: te quedan <strong id="trial-hours-left">24</strong> horas</span>
         <button class="btn btn--sm btn--primary" onclick="document.querySelector('[data-section=plans]').click();">Ver planes</button>
     </div>
+
+    <!-- ========== MOBILE BOTTOM TAB BAR ========== -->
+    <nav class="bottom-nav" id="bottom-nav">
+        <button class="bottom-nav__tab bottom-nav__tab--active" data-section="dashboard" aria-label="Dashboard">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>
+            <span>Inicio</span>
+        </button>
+        <button class="bottom-nav__tab" data-section="config" aria-label="Configuración">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+            <span>Config</span>
+        </button>
+        <button class="bottom-nav__tab bottom-nav__tab--fab" data-section="connection" aria-label="Conexión">
+            <div class="bottom-nav__fab-ring">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg>
+            </div>
+            <span>Conexión</span>
+        </button>
+        <button class="bottom-nav__tab" data-section="messages" aria-label="Mensajes">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+            <span>Mensajes</span>
+        </button>
+        <button class="bottom-nav__tab" data-section="plans" aria-label="Planes">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/></svg>
+            <span>Planes</span>
+        </button>
+    </nav>
 </body>
 </html>

@@ -1,9 +1,13 @@
 /**
  * Botly — Landing Page JavaScript
  * Preloader, navbar scroll, mobile menu, chat animation, scroll reveal
+ * OPTIMIZED: IntersectionObserver, passive listeners, requestIdleCallback
  */
 (function() {
     'use strict';
+
+    // ─── Utility: requestIdleCallback polyfill ───────────
+    var rIC = window.requestIdleCallback || function(cb) { return setTimeout(cb, 1); };
 
     // ─── Page Preloader ──────────────────────────────────
     var preloader = document.getElementById('preloader');
@@ -11,11 +15,15 @@
         window.addEventListener('load', function() {
             setTimeout(function() {
                 preloader.classList.add('preloader--hidden');
+                // Remove from DOM after animation to free memory
+                setTimeout(function() { if (preloader.parentNode) preloader.parentNode.removeChild(preloader); }, 500);
             }, 300);
         });
         // Safety net — hide after 3s even if load event fires late
         setTimeout(function() {
-            if (preloader) preloader.classList.add('preloader--hidden');
+            if (preloader && !preloader.classList.contains('preloader--hidden')) {
+                preloader.classList.add('preloader--hidden');
+            }
         }, 3000);
     }
 
@@ -44,6 +52,7 @@
         hamburger.addEventListener('click', function() {
             navLinks.classList.toggle('nav__links--open');
             hamburger.classList.toggle('nav__hamburger--open');
+            document.body.classList.toggle('nav-open');
         });
 
         // Close menu when a link is clicked
@@ -52,6 +61,7 @@
             links[i].addEventListener('click', function() {
                 navLinks.classList.remove('nav__links--open');
                 hamburger.classList.remove('nav__hamburger--open');
+                document.body.classList.remove('nav-open');
             });
         }
 
@@ -61,6 +71,7 @@
                 !navLinks.contains(e.target) && !hamburger.contains(e.target)) {
                 navLinks.classList.remove('nav__links--open');
                 hamburger.classList.remove('nav__hamburger--open');
+                document.body.classList.remove('nav-open');
             }
         });
     }
@@ -74,8 +85,7 @@
         });
     }
 
-    // ─── Scroll Reveal ───────────────────────────────────
-    // Add .reveal class to all sections and cards for staggered entrance
+    // ─── Scroll Reveal (IntersectionObserver — no scroll listener!) ─
     var revealSelectors = [
         '.problem-card', '.step-card', '.testimonial-card',
         '.pricing-card', '.faq-item', '.video-container',
@@ -83,70 +93,71 @@
         '.stats-bar__item'
     ];
 
-    var revealElements = [];
-    revealSelectors.forEach(function(selector) {
-        var els = document.querySelectorAll(selector);
-        for (var i = 0; i < els.length; i++) {
-            els[i].classList.add('reveal');
-            revealElements.push(els[i]);
-        }
-    });
+    if ('IntersectionObserver' in window) {
+        var revealObserver = new IntersectionObserver(function(entries) {
+            entries.forEach(function(entry) {
+                if (entry.isIntersecting) {
+                    entry.target.classList.add('revealed');
+                    revealObserver.unobserve(entry.target); // stop observing once revealed
+                }
+            });
+        }, { rootMargin: '0px 0px -80px 0px', threshold: 0.01 });
 
-    function checkReveal() {
-        var windowHeight = window.innerHeight;
-        revealElements.forEach(function(el) {
-            if (el.classList.contains('revealed')) return;
-            var rect = el.getBoundingClientRect();
-            if (rect.top < windowHeight - 80) {
-                el.classList.add('revealed');
+        rIC(function() {
+            revealSelectors.forEach(function(selector) {
+                var els = document.querySelectorAll(selector);
+                for (var i = 0; i < els.length; i++) {
+                    els[i].classList.add('reveal');
+                    revealObserver.observe(els[i]);
+                }
+            });
+        });
+    } else {
+        // Fallback: just show everything immediately
+        revealSelectors.forEach(function(selector) {
+            var els = document.querySelectorAll(selector);
+            for (var i = 0; i < els.length; i++) {
+                els[i].classList.add('reveal', 'revealed');
             }
         });
     }
 
-    window.addEventListener('scroll', checkReveal, { passive: true });
-    // Check on load (elements might already be in view)
-    setTimeout(checkReveal, 100);
-    setTimeout(checkReveal, 500);
-
-    // ─── Smooth scroll for anchor links ──────────────────
-
-    // ─── Counter animation ───────────────────────────────
+    // ─── Counter animation (IntersectionObserver) ────────
     var counterElements = document.querySelectorAll('.stats-bar__number[data-target]');
     var countersAnimated = false;
 
-    function animateCounters() {
-        if (countersAnimated) return;
+    if ('IntersectionObserver' in window && counterElements.length > 0) {
         var statsBar = document.querySelector('.stats-bar');
-        if (!statsBar) return;
-        var rect = statsBar.getBoundingClientRect();
-        if (rect.top < window.innerHeight - 60) {
-            countersAnimated = true;
-            counterElements.forEach(function(el) {
-                var target = parseInt(el.getAttribute('data-target'), 10);
-                var duration = 1800;
-                var start = 0;
-                var startTime = null;
+        if (statsBar) {
+            var counterObserver = new IntersectionObserver(function(entries) {
+                entries.forEach(function(entry) {
+                    if (entry.isIntersecting && !countersAnimated) {
+                        countersAnimated = true;
+                        counterObserver.disconnect();
+                        counterElements.forEach(function(el) {
+                            var target = parseInt(el.getAttribute('data-target'), 10);
+                            var duration = 1800;
+                            var startTime = null;
 
-                function step(timestamp) {
-                    if (!startTime) startTime = timestamp;
-                    var progress = Math.min((timestamp - startTime) / duration, 1);
-                    // easeOutQuart for natural deceleration
-                    var ease = 1 - Math.pow(1 - progress, 4);
-                    var current = Math.floor(ease * target);
-                    el.textContent = current.toLocaleString('es-MX');
-                    if (progress < 1) {
-                        requestAnimationFrame(step);
-                    } else {
-                        el.textContent = target.toLocaleString('es-MX');
+                            function step(timestamp) {
+                                if (!startTime) startTime = timestamp;
+                                var progress = Math.min((timestamp - startTime) / duration, 1);
+                                var ease = 1 - Math.pow(1 - progress, 4);
+                                el.textContent = Math.floor(ease * target).toLocaleString('es-MX');
+                                if (progress < 1) {
+                                    requestAnimationFrame(step);
+                                } else {
+                                    el.textContent = target.toLocaleString('es-MX');
+                                }
+                            }
+                            requestAnimationFrame(step);
+                        });
                     }
-                }
-                requestAnimationFrame(step);
-            });
+                });
+            }, { threshold: 0.2 });
+            counterObserver.observe(statsBar);
         }
     }
-
-    window.addEventListener('scroll', animateCounters, { passive: true });
-    setTimeout(animateCounters, 600);
 
     // ─── Smooth scroll for anchor links ──────────────────
     var anchorLinks = document.querySelectorAll('a[href^="#"]');

@@ -82,6 +82,7 @@
     // --- DOM refs ---
     var sidebar      = $('#sidebar');
     var hamburger    = $('#hamburger');
+    var sidebarOverlay = $('#sidebar-overlay');
     var sidebarLinks = $$('.sidebar__link');
     var sections     = $$('.section');
     var configForm   = $('#config-form');
@@ -101,6 +102,8 @@
     var botConnected = false;
 
     // --- Navigation ---
+    var bottomNavTabs = $$('.bottom-nav__tab');
+
     function navigateTo(name) {
         sections.forEach(function(s) { s.classList.add('section--hidden'); });
         var target = $('#section-' + name);
@@ -109,8 +112,25 @@
         var link = $('[data-section="' + name + '"]');
         if (link) link.classList.add('sidebar__link--active');
         sidebar.classList.remove('sidebar--open');
+        document.body.classList.remove('sidebar-open');
+        if (sidebarOverlay) sidebarOverlay.classList.remove('sidebar-overlay--visible');
+
+        // Update bottom nav active tab
+        bottomNavTabs.forEach(function(tab) {
+            if (tab.dataset.section === name) {
+                tab.classList.add('bottom-nav__tab--active');
+            } else {
+                tab.classList.remove('bottom-nav__tab--active');
+            }
+        });
+
+        // Scroll to top of section on mobile
+        if (window.innerWidth <= 768) {
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+        }
     }
 
+    // Sidebar links
     sidebarLinks.forEach(function(l) {
         l.addEventListener('click', function(e) {
             if (!l.dataset.section) return;   // let normal <a> navigation happen (e.g. /admin)
@@ -118,11 +138,33 @@
             navigateTo(l.dataset.section);
         });
     });
+
+    // Bottom nav tabs
+    bottomNavTabs.forEach(function(tab) {
+        tab.addEventListener('click', function() {
+            if (tab.dataset.section) {
+                navigateTo(tab.dataset.section);
+            }
+        });
+    });
+
     $$('[data-goto]').forEach(function(b) {
         b.addEventListener('click', function() { navigateTo(b.dataset.goto); });
     });
     if (hamburger) {
-        hamburger.addEventListener('click', function() { sidebar.classList.toggle('sidebar--open'); });
+        hamburger.addEventListener('click', function() {
+            var isOpen = sidebar.classList.toggle('sidebar--open');
+            document.body.classList.toggle('sidebar-open', isOpen);
+            if (sidebarOverlay) sidebarOverlay.classList.toggle('sidebar-overlay--visible', isOpen);
+        });
+    }
+    // Close sidebar when clicking overlay
+    if (sidebarOverlay) {
+        sidebarOverlay.addEventListener('click', function() {
+            sidebar.classList.remove('sidebar--open');
+            document.body.classList.remove('sidebar-open');
+            sidebarOverlay.classList.remove('sidebar-overlay--visible');
+        });
     }
 
     // --- Toast ---
@@ -269,16 +311,22 @@
         });
     }
 
-    // --- Socket.io ---
+    // --- Socket.io (lazy — only connect when needed) ---
     function initSocket() {
         if (socket || isPreview) return;
-        if (typeof io === 'undefined') return;
+        if (typeof io === 'undefined') {
+            // Socket.io not loaded yet — retry in 500ms
+            setTimeout(initSocket, 500);
+            return;
+        }
 
         socket = io({
             auth: { token: localStorage.getItem('botsaas_token') },
             reconnectionAttempts: 10,
-            reconnectionDelay: 1000,
-            timeout: 8000
+            reconnectionDelay: 2000,
+            reconnectionDelayMax: 10000,
+            timeout: 10000,
+            transports: ['websocket', 'polling'] // prefer WebSocket for lower overhead
         });
 
         socket.on('connect', function() { console.log('[Socket] Conectado'); });
@@ -637,6 +685,7 @@
         // Switch views
         if (inboxView) inboxView.style.display = 'none';
         if (chatView) chatView.classList.remove('chat-view--hidden');
+        document.body.classList.add('chat-open');
 
         // Render messages
         renderChatMessages(convo.messages);
@@ -650,6 +699,7 @@
         currentChatPhone = null;
         if (chatView) chatView.classList.add('chat-view--hidden');
         if (inboxView) inboxView.style.display = '';
+        document.body.classList.remove('chat-open');
         renderInbox(inboxSearch ? inboxSearch.value.trim() : '');
     }
 
@@ -1137,7 +1187,9 @@
         });
     }
 
-    // --- Init ---
+    // --- Init (prioritizes critical path, defers secondary loads) ---
+    var rIC = window.requestIdleCallback || function(cb) { return setTimeout(cb, 1); };
+
     function init() {
         var draft = loadDraft();
         if (draft) {
@@ -1151,6 +1203,7 @@
             return;
         }
 
+        // Critical: load config + bot status first
         apiCall('/config').then(function(res) {
             if (res.data) hydrateForm(res.data);
         }).catch(function() { /* use draft */ });
@@ -1165,23 +1218,21 @@
             }
         }).catch(function() { /* ignore */ });
 
-        // Load messages history
-        loadMessagesFromAPI();
+        // Secondary: load messages (deferred)
+        rIC(function() {
+            loadMessagesFromAPI();
+            loadResponseMode();
+            loadPausedChats();
+        });
 
-        // Load response mode & paused chats
-        loadResponseMode();
-        loadPausedChats();
-
-        // Load subscription status
-        loadSubscription();
-
-        // Check payment result from URL
-        checkPaymentResult();
-
-        // Load message filters & scheduled messages
-        loadMessageFilters();
-        loadScheduledMessages();
-        loadGroupsForSelectors();
+        // Low priority: subscription, payment, filters
+        rIC(function() {
+            loadSubscription();
+            checkPaymentResult();
+            loadMessageFilters();
+            loadScheduledMessages();
+            loadGroupsForSelectors();
+        });
     }
 
     // ═══════════════════════════════════════════════════

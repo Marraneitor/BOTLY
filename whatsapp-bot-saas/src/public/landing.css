@@ -1047,6 +1047,13 @@ body::before {
     .nav__hamburger--open span:nth-child(1) { transform: rotate(45deg) translate(5px, 5px); }
     .nav__hamburger--open span:nth-child(2) { opacity: 0; }
     .nav__hamburger--open span:nth-child(3) { transform: rotate(-45deg) translate(5px, -5px); }
+
+    /* Prevent body scroll when mobile menu is open */
+    body.nav-open {
+        overflow: hidden;
+        position: fixed;
+        width: 100%;
+    }
 }
 
 @media (max-width: 480px) {
@@ -1057,4 +1064,156 @@ body::before {
     .problem-card { padding: 1.5rem; }
     .pricing-card { padding: 1.5rem; }
     .pricing-card__amount { font-size: 2rem; }
+}
+
+@media (max-width: 380px) {
+    .hero__title { font-size: 1.5rem; }
+    .hero__subtitle { font-size: .85rem; }
+    .section__label { font-size: .65rem; }
+    .section__title { font-size: 1.4rem; }
+    .nav__brand { font-size: 1rem; }
+    .stats-bar__number { font-size: 1.6rem; }
+}
+
+/* ── Performance ── */
+@media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after {
+        animation-duration: 0.01ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 0.01ms !important;
+        scroll-behavior: auto !important;
+    }
+    .reveal { opacity: 1; transform: none; }
+}
+
+/* ── Touch-friendly targets ── */
+@media (pointer: coarse) {
+    .nav__link {
+        min-height: 44px;
+        display: flex;
+        align-items: center;
+    }
+    .nav__cta {
+        min-height: 44px;
+    }
+    .btn {
+        min-height: 44px;
+    }
+    .nav__hamburger {
+        width: 44px;
+        height: 44px;
+    }
+    .faq-item summary {
+        min-height: 48px;
+    }
+    .btn:active, .nav__link:active, .pricing-card:active {
+        transform: scale(0.97);
+        transition: transform 0.1s ease;
+    }
+}
+
+/* ── Safe area insets for notched phones ── */
+@supports (padding: env(safe-area-inset-bottom)) {
+    .footer__bottom {
+        padding-bottom: calc(1.25rem + env(safe-area-inset-bottom));
+    }
+    .floating-wa {
+        bottom: calc(1.5rem + env(safe-area-inset-bottom));
+        right: calc(1.5rem + env(safe-area-inset-right));
+    }
+}
+
+/* ── Smooth text & touch ── */
+* {
+    -webkit-tap-highlight-color: transparent;
+}
+
+img {
+    max-width: 100%;
+    height: auto;
+    content-visibility: auto;
+}
+
+/* ── GPU hints for animated elements ── */
+.nav, .preloader, .floating-wa, .reveal, .hero__phone-mockup {
+    will-change: transform, opacity;
+}
+
+/* ============================================================
+   MOBILE STICKY CTA BAR
+   ============================================================ */
+.mobile-cta-bar {
+    display: none;
+    position: fixed;
+    bottom: 0; left: 0; right: 0;
+    z-index: 1000;
+    background: rgba(10, 10, 18, 0.92);
+    backdrop-filter: blur(20px) saturate(1.4);
+    -webkit-backdrop-filter: blur(20px) saturate(1.4);
+    border-top: 1px solid var(--border);
+    padding: .65rem 1rem calc(.65rem + env(safe-area-inset-bottom, 0px));
+    align-items: center;
+    gap: .75rem;
+    box-shadow: 0 -4px 24px rgba(0,0,0,.4);
+}
+
+.mobile-cta-bar__btn {
+    flex: 1;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: .5rem;
+    padding: .82rem 1.25rem;
+    border-radius: var(--radius-lg);
+    background: linear-gradient(135deg, var(--emerald), var(--emerald-dark));
+    color: #fff;
+    font-weight: 700;
+    font-size: .92rem;
+    text-decoration: none;
+    border: none;
+    cursor: pointer;
+    transition: all .2s ease;
+    box-shadow: 0 4px 16px rgba(16,185,129,.3);
+    -webkit-tap-highlight-color: transparent;
+}
+.mobile-cta-bar__btn:active {
+    transform: scale(0.96);
+    box-shadow: 0 2px 8px rgba(16,185,129,.2);
+}
+.mobile-cta-bar__btn svg {
+    flex-shrink: 0;
+}
+
+.mobile-cta-bar__link {
+    padding: .7rem 1rem;
+    color: var(--text-secondary);
+    font-weight: 600;
+    font-size: .82rem;
+    text-decoration: none;
+    white-space: nowrap;
+    transition: color .15s;
+}
+.mobile-cta-bar__link:hover {
+    color: var(--emerald);
+}
+
+@media (max-width: 768px) {
+    .mobile-cta-bar {
+        display: flex;
+    }
+    /* Move floating WA button above the CTA bar */
+    .floating-wa {
+        bottom: calc(5rem + env(safe-area-inset-bottom, 0px));
+    }
+    /* Add padding to footer so it's not covered by CTA bar */
+    .footer {
+        padding-bottom: calc(5rem + env(safe-area-inset-bottom, 0px));
+    }
+}
+
+/* ── Print ── */
+@media print {
+    .nav, .preloader, .floating-wa, .hero__bg-glow, .mobile-cta-bar { display: none !important; }
+    body { background: white; color: black; }
+    body::before { display: none; }
 }

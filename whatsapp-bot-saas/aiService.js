@@ -15,10 +15,24 @@ const GEMINI_API_KEY = process.env.GEMINI_API_KEY || '';
 // ─── Gemini client cache ──
 const clientCache = new Map();
 
-// ─── Conversation histories: Map<`${uid}::${chatId}`, Array<{role,parts}>> ──
+// ─── Conversation histories: Map<`${uid}::${chatId}`, { history, lastAccess }> ──
 const chatHistories = new Map();
 
 const MAX_HISTORY = 30; // messages per conversation
+const HISTORY_TTL = 2 * 60 * 60 * 1000; // 2 hours — auto-expire stale chats
+
+// ── Periodic cleanup: evict stale conversations every 30 min to save memory ──
+setInterval(() => {
+    const now = Date.now();
+    let evicted = 0;
+    for (const [key, entry] of chatHistories) {
+        if (now - entry.lastAccess > HISTORY_TTL) {
+            chatHistories.delete(key);
+            evicted++;
+        }
+    }
+    if (evicted > 0) console.log(`[AI] Evicted ${evicted} stale conversation(s) from memory`);
+}, 30 * 60 * 1000);
 
 // ─────────────────────────────────────────────────────────
 //  Helpers
@@ -151,7 +165,7 @@ function getModel(apiKey, systemPrompt) {
     }
 
     return genAI.getGenerativeModel({
-        model: 'gemini-1.5-flash-8b',
+        model: 'gemini-2.0-flash',
         systemInstruction: systemPrompt,
         generationConfig: {
             temperature: 0.7,
@@ -187,7 +201,8 @@ async function getAIResponse(uid, chatId, message, senderName, config) {
 
     // ── History key ──
     const histKey = `${uid}::${chatId}`;
-    let history = chatHistories.get(histKey) || [];
+    const entry = chatHistories.get(histKey);
+    let history = entry ? entry.history : [];
 
     // ── Start chat with history ──
     const chat = model.startChat({
@@ -207,7 +222,7 @@ async function getAIResponse(uid, chatId, message, senderName, config) {
         if (history.length > MAX_HISTORY * 2) {
             history = history.slice(-MAX_HISTORY * 2);
         }
-        chatHistories.set(histKey, history);
+        chatHistories.set(histKey, { history, lastAccess: Date.now() });
 
         return text;
     } catch (err) {
@@ -222,7 +237,7 @@ async function getAIResponse(uid, chatId, message, senderName, config) {
                 const retryText = retry.response.text().trim();
                 history.push({ role: 'user', parts: [{ text: message }] });
                 history.push({ role: 'model', parts: [{ text: retryText }] });
-                chatHistories.set(histKey, history);
+                chatHistories.set(histKey, { history, lastAccess: Date.now() });
                 return retryText;
             } catch {
                 /* fall through to fallback */
