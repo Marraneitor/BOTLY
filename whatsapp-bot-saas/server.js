@@ -56,33 +56,33 @@ const PLANS = {
     monthly: {
         id: 'monthly',
         name: 'Mensual',
-        price: 7900,          // $79.00 MXN in centavos
+        price: 9900,          // $99.00 MXN in centavos
         currency: 'mxn',
         duration: 1,          // 1 month
         bonus: 0,
-        label: '$79 MXN / mes',
+        label: '$99 MXN / mes',
         description: '1 mes de Botly',
         badge: null
     },
     quarterly: {
         id: 'quarterly',
         name: 'Trimestral',
-        price: 23700,         // $237.00 MXN in centavos
+        price: 29900,         // $299.00 MXN in centavos
         currency: 'mxn',
         duration: 3,          // 3 months paid
         bonus: 1,             // +1 month free = 4 months total
-        label: '$237 MXN / 3 meses',
+        label: '$299 MXN / 3 meses',
         description: '3 meses + 1 mes gratis (4 meses total)',
         badge: '+1 mes gratis'
     },
     yearly: {
         id: 'yearly',
         name: 'Anual',
-        price: 94800,         // $948.00 MXN in centavos
+        price: 99900,         // $999.00 MXN in centavos
         currency: 'mxn',
         duration: 12,         // 12 months paid
         bonus: 6,             // +6 months free = 18 months total
-        label: '$948 MXN / año',
+        label: '$999 MXN / año',
         description: '12 meses + 6 meses gratis (18 meses total)',
         badge: '+6 meses gratis'
     }
