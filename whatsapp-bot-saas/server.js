@@ -560,7 +560,8 @@ app.get('/api/account/stats', authMiddleware, async (req, res) => {
         let totalOutgoing = 0;
         let todayIncoming = 0;
         let todayOutgoing = 0;
-        const todayStr = new Date().toISOString().slice(0, 10);
+        // Use Mexico City timezone for "today" calculation
+        const todayStr = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Mexico_City' }); // YYYY-MM-DD
 
         msgs.forEach(m => {
             contacts.add(m.from);

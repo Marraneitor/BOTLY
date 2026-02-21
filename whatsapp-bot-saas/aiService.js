@@ -38,13 +38,39 @@ setInterval(() => {
 //  Helpers
 // ─────────────────────────────────────────────────────────
 
-function getDayName() {
-    const days = ['domingo', 'lunes', 'martes', 'miércoles', 'jueves', 'viernes', 'sábado'];
-    return days[new Date().getDay()];
+// Always use Veracruz/Mexico City timezone (UTC-6 / UTC-5 DST)
+const TIMEZONE = 'America/Mexico_City';
+
+/**
+ * Get current date/time parts in Mexico timezone.
+ * Returns { dayIndex, hours, minutes, dateObj }
+ */
+function getMexicoNow() {
+    const now = new Date();
+    // Get Mexico-localized parts
+    const parts = new Intl.DateTimeFormat('en-US', {
+        timeZone: TIMEZONE,
+        weekday: 'short', hour: 'numeric', minute: 'numeric', hour12: false
+    }).formatToParts(now);
+
+    const dayStr = parts.find(p => p.type === 'weekday')?.value || '';
+    const hour   = parseInt(parts.find(p => p.type === 'hour')?.value || '0', 10);
+    const minute = parseInt(parts.find(p => p.type === 'minute')?.value || '0', 10);
+
+    const dayMap = { Sun: 0, Mon: 1, Tue: 2, Wed: 3, Thu: 4, Fri: 5, Sat: 6 };
+    return { dayIndex: dayMap[dayStr] ?? now.getDay(), hours: hour, minutes: minute };
 }
 
-function formatTime(date) {
-    return date.toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit', hour12: true });
+function getDayName() {
+    const days = ['domingo', 'lunes', 'martes', 'miércoles', 'jueves', 'viernes', 'sábado'];
+    return days[getMexicoNow().dayIndex];
+}
+
+function formatTime() {
+    return new Date().toLocaleTimeString('es-MX', {
+        timeZone: TIMEZONE,
+        hour: '2-digit', minute: '2-digit', hour12: true
+    });
 }
 
 /**
@@ -67,13 +93,13 @@ function checkSchedule(schedule) {
         return { isOpen: false, statusMsg: `Hoy ${today} no hay servicio.` };
     }
 
-    const now = new Date();
+    const mx = getMexicoNow();
     const [openH, openM] = (daySchedule.open || '00:00').split(':').map(Number);
     const [closeH, closeM] = (daySchedule.close || '00:00').split(':').map(Number);
 
     const openMin = openH * 60 + openM;
     const closeMin = closeH * 60 + closeM;
-    const nowMin = now.getHours() * 60 + now.getMinutes();
+    const nowMin = mx.hours * 60 + mx.minutes;
 
     if (closeMin === 0 && openMin === 0) {
         return { isOpen: true, statusMsg: 'Abierto todo el día' };
@@ -116,9 +142,8 @@ function buildSystemPrompt(config) {
     const customPrompt = config.botPrompt || '';
     const scheduleText = buildScheduleText(config.schedule);
     const { isOpen, statusMsg } = checkSchedule(config.schedule);
-    const now = new Date();
     const dayName = getDayName();
-    const timeStr = formatTime(now);
+    const timeStr = formatTime();
 
     return `${customPrompt}
 
