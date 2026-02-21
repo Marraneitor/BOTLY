@@ -1693,14 +1693,8 @@
 
         populateProfile();
 
-        // Lazy load: only fetch stats when user navigates to account section
-        var origNavigate = navigateTo;
-        navigateTo = function(name) {
-            origNavigate(name);
-            if (name === 'account' && !accountLoaded) {
-                loadAccountStats();
-            }
-        };
+        // Load stats immediately (this is now the home screen)
+        loadAccountStats();
 
         // Logout button in account section
         var btnLogoutAcct = $('#btn-logout-account');

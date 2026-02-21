@@ -42,9 +42,9 @@
         </div>
 
         <nav class="sidebar__nav">
-            <a href="#" class="sidebar__link sidebar__link--active" data-section="dashboard">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>
-                Dashboard
+            <a href="#" class="sidebar__link sidebar__link--active" data-section="account">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+                Mi Cuenta
             </a>
             <a href="#" class="sidebar__link" data-section="config">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
@@ -66,10 +66,6 @@
             <a href="#" class="sidebar__link" data-section="plans">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/></svg>
                 Planes
-            </a>
-            <a href="#" class="sidebar__link" data-section="account">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
-                Mi Cuenta
             </a>
             <a href="#" class="sidebar__link sidebar__link--admin" id="admin-link" data-section="admin" style="display:none;">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 15v2m-6 4h12a2 2 0 0 0 2-2v-6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v6a2 2 0 0 0 2 2zm10-10V7a4 4 0 0 0-8 0v4h8z"/></svg>
@@ -96,44 +92,7 @@
     <!-- ========== MAIN CONTENT ========== -->
     <main class="main">
         <!-- ---- SECTION: Dashboard ---- -->
-        <section class="section" id="section-dashboard">
-            <h1 class="section__title">Dashboard</h1>
-            <div class="cards">
-                <div class="card card--status" id="card-status">
-                    <div class="card__icon card__icon--disconnected" id="status-icon">
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/></svg>
-                    </div>
-                    <div class="card__body">
-                        <span class="card__label">Estado del Bot</span>
-                        <strong class="card__value" id="status-text">Desconectado</strong>
-                    </div>
-                </div>
-                <div class="card">
-                    <div class="card__icon">
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
-                    </div>
-                    <div class="card__body">
-                        <span class="card__label">Mensajes hoy</span>
-                        <strong class="card__value" id="messages-today">0</strong>
-                    </div>
-                </div>
-                <div class="card">
-                    <div class="card__icon">
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/></svg>
-                    </div>
-                    <div class="card__body">
-                        <span class="card__label">Contactos atendidos</span>
-                        <strong class="card__value" id="contacts-count">0</strong>
-                    </div>
-                </div>
-            </div>
-
-            <div class="quick-actions">
-                <h2 class="quick-actions__title">Acciones rápidas</h2>
-                <button class="btn btn--primary" data-goto="config">Editar configuración</button>
-                <button class="btn btn--success" data-goto="connection">Ver conexión QR</button>
-            </div>
-        </section>
+        <!-- section-dashboard removed: merged into section-account -->
 
         <!-- ---- SECTION: Configuración del Bot ---- -->
         <section class="section section--hidden" id="section-config">
@@ -800,7 +759,7 @@
         </section>
 
         <!-- ---- SECTION: Mi Cuenta ---- -->
-        <section class="section section--hidden" id="section-account">
+        <section class="section" id="section-account">
             <h1 class="section__title">Mi Cuenta</h1>
             <p class="section__subtitle">Resumen de tu actividad y configuración de cuenta.</p>
 
@@ -812,6 +771,43 @@
                     <p class="account-profile__email" id="account-email">—</p>
                     <div class="account-profile__plan" id="account-plan-badge">—</div>
                 </div>
+            </div>
+
+            <!-- Dashboard cards (real-time via socket) -->
+            <div class="cards">
+                <div class="card card--status" id="card-status">
+                    <div class="card__icon card__icon--disconnected" id="status-icon">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/></svg>
+                    </div>
+                    <div class="card__body">
+                        <span class="card__label">Estado del Bot</span>
+                        <strong class="card__value" id="status-text">Desconectado</strong>
+                    </div>
+                </div>
+                <div class="card">
+                    <div class="card__icon">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+                    </div>
+                    <div class="card__body">
+                        <span class="card__label">Mensajes hoy</span>
+                        <strong class="card__value" id="messages-today">0</strong>
+                    </div>
+                </div>
+                <div class="card">
+                    <div class="card__icon">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/></svg>
+                    </div>
+                    <div class="card__body">
+                        <span class="card__label">Contactos atendidos</span>
+                        <strong class="card__value" id="contacts-count">0</strong>
+                    </div>
+                </div>
+            </div>
+
+            <div class="quick-actions">
+                <h2 class="quick-actions__title">Acciones rápidas</h2>
+                <button class="btn btn--primary" data-goto="config">Editar configuración</button>
+                <button class="btn btn--success" data-goto="connection">Ver conexión QR</button>
             </div>
 
             <!-- Stats grid -->
@@ -1019,9 +1015,9 @@
 
     <!-- ========== MOBILE BOTTOM TAB BAR ========== -->
     <nav class="bottom-nav" id="bottom-nav">
-        <button class="bottom-nav__tab bottom-nav__tab--active" data-section="dashboard" aria-label="Dashboard">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>
-            <span>Inicio</span>
+        <button class="bottom-nav__tab bottom-nav__tab--active" data-section="account" aria-label="Mi Cuenta">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+            <span>Cuenta</span>
         </button>
         <button class="bottom-nav__tab" data-section="config" aria-label="Configuración">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
@@ -1037,9 +1033,9 @@
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
             <span>Mensajes</span>
         </button>
-        <button class="bottom-nav__tab" data-section="account" aria-label="Cuenta">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
-            <span>Cuenta</span>
+        <button class="bottom-nav__tab" data-section="ventas" aria-label="Ventas">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
+            <span>Ventas</span>
         </button>
     </nav>
 </body>
