@@ -29,7 +29,7 @@ const Stripe = require('stripe');
 const compression = require('compression');
 
 // ─── Baileys (lightweight WhatsApp library — no Chrome!) ─
-const { default: makeWASocket, useMultiFileAuthState, DisconnectReason, fetchLatestBaileysVersion, makeCacheableSignalKeyStore } = require('@whiskeysockets/baileys');
+const { default: makeWASocket, useMultiFileAuthState, DisconnectReason, fetchLatestBaileysVersion, makeCacheableSignalKeyStore, Browsers } = require('@whiskeysockets/baileys');
 const QRCode = require('qrcode');
 const pino = require('pino');
 
@@ -1750,8 +1750,15 @@ async function startBot(uid, email, _retryCount = 0) {
     if (!fs.existsSync(authDir)) fs.mkdirSync(authDir, { recursive: true });
     const { state, saveCreds } = await useMultiFileAuthState(authDir);
 
-    const { version } = await fetchLatestBaileysVersion();
-    console.log(`[Bot] Using Baileys WA version ${version.join('.')}`);
+    // Fetch latest WA version — fallback to known-good if network call fails
+    let version = [2, 3000, 1023654440];
+    try {
+        const verResult = await fetchLatestBaileysVersion();
+        if (verResult?.version) version = verResult.version;
+        console.log(`[Bot] Using Baileys WA version ${version.join('.')}`);
+    } catch (e) {
+        console.warn(`[Bot] fetchLatestBaileysVersion failed, using fallback: ${version.join('.')}`, e.message);
+    }
 
     const sock = makeWASocket({
         version,
@@ -1761,17 +1768,20 @@ async function startBot(uid, email, _retryCount = 0) {
         },
         logger: baileysLogger,
         printQRInTerminal: false,
-        browser: ['Botly', 'Chrome', '120.0.0'],
+        browser: Browsers.ubuntu('Chrome'),
         generateHighQualityLinkPreview: false,
         syncFullHistory: false,
         markOnlineOnConnect: true,
         connectTimeoutMs: 60000,
-        qrTimeout: 40000,
-        defaultQueryTimeoutMs: 0
+        qrTimeout: 60000,
+        defaultQueryTimeoutMs: 0,
+        retryRequestDelayMs: 2000
     });
 
     botState.sock = sock;
 
+    // Swallow raw WS errors so they don't crash the process
+    try { if (sock.ws && typeof sock.ws.on === 'function') sock.ws.on('error', function(err){ console.error('[Bot] WS error for ' + email + ':', err.message); }); } catch {}
     // Save credentials whenever they update
     sock.ev.on('creds.update', saveCreds);
 
@@ -1814,9 +1824,10 @@ async function startBot(uid, email, _retryCount = 0) {
 
         if (connection === 'close') {
             const statusCode = lastDisconnect?.error?.output?.statusCode;
+            const errorMsg = lastDisconnect?.error?.message || lastDisconnect?.error?.toString() || 'unknown';
             const shouldReconnect = statusCode !== DisconnectReason.loggedOut;
 
-            console.log(`[Bot] Connection closed for ${email}: code=${statusCode}, reconnect=${shouldReconnect}`);
+            console.log(`[Bot] Connection closed for ${email}: code=${statusCode}, error=${errorMsg}, reconnect=${shouldReconnect}`);
 
             if (shouldReconnect && botState.retryCount < 5) {
                 botState.retryCount++;
