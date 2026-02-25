@@ -336,6 +336,7 @@
 
         socket.on('qr', function(qrString) {
             console.log('[Socket] QR recibido');
+            navigateTo('connection');
             renderQR(qrString);
         });
 
