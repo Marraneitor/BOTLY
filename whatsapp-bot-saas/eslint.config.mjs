@@ -1,0 +1,48 @@
+import js from "@eslint/js";
+
+export default [
+  js.configs.recommended,
+  {
+    files: ["*.js"],
+    languageOptions: {
+      ecmaVersion: 2022,
+      sourceType: "commonjs",
+      globals: {
+        require: "readonly",
+        module: "readonly",
+        exports: "readonly",
+        __dirname: "readonly",
+        __filename: "readonly",
+        process: "readonly",
+        console: "readonly",
+        setTimeout: "readonly",
+        setInterval: "readonly",
+        clearTimeout: "readonly",
+        clearInterval: "readonly",
+        Buffer: "readonly",
+        Promise: "readonly",
+        Map: "readonly",
+        Set: "readonly",
+        URL: "readonly",
+        Date: "readonly",
+        Math: "readonly",
+        JSON: "readonly",
+        Error: "readonly",
+        parseInt: "readonly",
+        parseFloat: "readonly",
+        isNaN: "readonly",
+        Array: "readonly",
+        Object: "readonly",
+        String: "readonly",
+        Boolean: "readonly",
+        Number: "readonly",
+        Symbol: "readonly",
+      },
+    },
+    rules: {
+      "no-unused-vars": ["warn", { vars: "all", args: "none" }],
+      "no-unreachable": "warn",
+      "no-undef": "warn",
+    },
+  },
+];

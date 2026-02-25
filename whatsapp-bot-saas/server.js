@@ -268,7 +268,7 @@ async function authMiddleware(req, res, next) {
         // Prevent browser from caching per-user API responses across accounts
         res.set('Cache-Control', 'no-store');
         next();
-    } catch (err) {
+    } catch {
         tokenCache.delete(raw);
         return res.status(401).json({ error: 'Token inválido o expirado.' });
     }
@@ -1715,7 +1715,7 @@ async function startBot(uid, email) {
         try {
             existing.sock.ev.removeAllListeners();
             existing.sock.end(undefined);
-        } catch(e) { /* ignore */ }
+        } catch { /* ignore */ }
     }
 
     // Load persisted pause state
@@ -1819,7 +1819,7 @@ async function startBot(uid, email) {
                     try {
                         fs.rmSync(authDir, { recursive: true, force: true });
                         console.log(`[Bot] Auth cleared for ${email} (logged out)`);
-                    } catch (e) { /* ignore */ }
+                    } catch { /* ignore */ }
                     // User logged out from phone — clear persistent flag
                     saveUserConfig(uid, { botActive: false }).catch(() => {});
                 }

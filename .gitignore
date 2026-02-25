@@ -3,27 +3,20 @@
 .env.*
 !.env.example
 node_modules/
-__pycache__/
-*.pyc
 
-# WhatsApp session
-.wwebjs_auth/
-.wwebjs_cache/
+# WhatsApp session (Baileys auth)
 .baileys_auth/
+whatsapp-bot-saas/auth_*/
 
 # Firebase credentials (NEVER commit)
 firebase-service-account.json
 **/firebase-service-account.json
 
-# Data files with user info
+# Data files con info de usuarios
 whatsapp-bot-saas/data/
-whatsapp-bot-saas-1/data/
 
 # Logs
 *.log
-bot_startup.log
-bridge_output.log
-flask_output.log
 
 # IDE
 .vscode/
