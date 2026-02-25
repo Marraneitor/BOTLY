@@ -26,7 +26,7 @@ const { Server: SocketServer } = require('socket.io');
 const path = require('path');
 const fs = require('fs');
 const admin = require('firebase-admin');
-const { getAIResponse } = require('./aiService');
+const { getAIResponse, detectOrderConfirmation } = require('./aiService');
 const Stripe = require('stripe');
 const compression = require('compression');
 
@@ -227,6 +227,9 @@ setInterval(() => {
 // ─── Per-user state ──────────────────────────────────────
 // Maps: uid → { client, status, lastQR, stats }
 const userBots = new Map();
+// ─── Per-chat message debounce buffers (6s wait before AI reply) ─
+// Map<`uid::jid`, { timer, texts[], phone, senderName, config, sock, room, email, botState }>
+const pendingMsgBuffers = new Map();
 
 // ─── Messages storage (Firestore: users/{uid}/messages) ──
 async function loadMessages(uid) {
@@ -2004,23 +2007,8 @@ async function startBot(uid, email, _retryCount = 0) {
                     continue;
                 }
 
-                // Auto mode: get AI response and send
-                const reply = await getAIResponse(uid, jid, text, senderName, config);
-
-                // Send reply via Baileys
-                await sock.sendMessage(jid, { text: reply });
-
-                // Save bot reply
-                const outgoingMsg = {
-                    id: msgId + '_reply',
-                    from: phone,
-                    senderName: senderName,
-                    body: reply,
-                    direction: 'outgoing',
-                    timestamp: new Date().toISOString()
-                };
-                await saveMessage(uid, outgoingMsg);
-                io.to(room).emit('new_message', outgoingMsg);
+                // Auto mode: buffer 6s then reply (let user finish typing)
+                bufferAndReply(uid, jid, text, phone, senderName, config, sock, room, email, botState);
             } catch (error) {
                 console.error(`[Bot][${email}] Error:`, error.message);
             }
@@ -2028,9 +2016,86 @@ async function startBot(uid, email, _retryCount = 0) {
     });
 }
 
+// ══════════════════════════════════════════════════════════
+//  MESSAGE DEBOUNCE — wait 6s after last message, then reply
+// ══════════════════════════════════════════════════════════
+function bufferAndReply(uid, jid, text, phone, senderName, config, sock, room, email, botState) {
+    const key = `${uid}::${jid}`;
+    const existing = pendingMsgBuffers.get(key);
+    if (existing) {
+        clearTimeout(existing.timer);
+        existing.texts.push(text);
+        existing.config = config; // refresh config in case it changed
+        existing.sock = sock;
+    } else {
+        pendingMsgBuffers.set(key, { texts: [text], phone, senderName, config, sock, room, email, botState });
+    }
+    const entry = pendingMsgBuffers.get(key);
+    entry.timer = setTimeout(async () => {
+        pendingMsgBuffers.delete(key);
+        const combined = entry.texts.join('\n');
+        const ownerJid = entry.sock?.user?.id;
+        try {
+            const reply = await getAIResponse(uid, jid, combined, entry.senderName, entry.config);
+            await entry.sock.sendMessage(jid, { text: reply });
+
+            const outgoingMsg = {
+                id: Date.now() + '_reply',
+                from: entry.phone,
+                senderName: entry.senderName,
+                body: reply,
+                direction: 'outgoing',
+                timestamp: new Date().toISOString()
+            };
+            await saveMessage(uid, outgoingMsg);
+            io.to(entry.room).emit('new_message', outgoingMsg);
+            const n = entry.texts.length;
+            console.log(`[Bot][${entry.email}] ✅ Replied to ${entry.phone} (${n} msg${n > 1 ? 's' : ''} combined)`);
+
+            // ── Real-time order detection ──
+            try {
+                const orderInfo = await detectOrderConfirmation(uid, jid, combined, reply, entry.config);
+                if (orderInfo?.isOrder && ownerJid) {
+                    const now = new Date().toLocaleString('es-MX', {
+                        timeZone: 'America/Mexico_City', dateStyle: 'full', timeStyle: 'short'
+                    });
+                    const orderMsg =
+                        `🛎️ *NUEVO PEDIDO CONFIRMADO*\n\n` +
+                        `👤 *Cliente:* ${entry.senderName}\n` +
+                        `📞 *Teléfono:* ${entry.phone}\n` +
+                        `📅 *Fecha y hora:* ${now}\n\n` +
+                        `📋 *Detalle del pedido:*\n${orderInfo.summary}`;
+                    await entry.sock.sendMessage(ownerJid, { text: orderMsg });
+                    io.to(entry.room).emit('order_confirmed', {
+                        phone: entry.phone, senderName: entry.senderName,
+                        summary: orderInfo.summary, timestamp: now
+                    });
+                    console.log(`[Bot][${entry.email}] 📦 Order forwarded to owner from ${entry.phone}`);
+                }
+            } catch (orderErr) {
+                console.error(`[Bot][${entry.email}] Order detection error:`, orderErr.message);
+            }
+        } catch (err) {
+            console.error(`[Bot][${entry.email}] Error replying to ${entry.phone}:`, err.message);
+        }
+    }, 6000);
+}
+
+function clearPendingBuffers(uid) {
+    for (const [key, entry] of pendingMsgBuffers) {
+        if (key.startsWith(`${uid}::`)) {
+            clearTimeout(entry.timer);
+            pendingMsgBuffers.delete(key);
+        }
+    }
+}
+
 async function stopBot(uid) {
     const bot = userBots.get(uid);
     if (!bot) return;
+
+    // Clear pending debounce buffers
+    clearPendingBuffers(uid);
 
     // Clear scheduled message timers
     const timers = scheduledTimers.get(uid) || [];

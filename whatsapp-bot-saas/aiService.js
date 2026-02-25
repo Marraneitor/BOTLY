@@ -322,9 +322,54 @@ function clearUserHistories(uid) {
     }
 }
 
+// ─────────────────────────────────────────────────────────
+//  Real-time order detection
+// ─────────────────────────────────────────────────────────
+
+/**
+ * Analyse the latest exchange and determine if a confirmed order was placed.
+ * @returns {Promise<{isOrder: boolean, summary: string}|null>}
+ */
+async function detectOrderConfirmation(uid, chatId, customerMsg, botReply, config) {
+    if (!GEMINI_API_KEY) return null;
+
+    const histKey = `${uid}::${chatId}`;
+    const entry = chatHistories.get(histKey);
+    const recentHistory = entry ? entry.history.slice(-10) : [];
+
+    const historyText = recentHistory.map(h =>
+        `${h.role === 'user' ? 'Cliente' : 'Bot'}: ${h.parts[0]?.text || ''}`
+    ).join('\n');
+
+    const prompt =
+        `Analiza si en esta conversación de WhatsApp el cliente hizo un PEDIDO CONFIRMADO ` +
+        `(especificó qué quiere pedir con cantidades y está listo para proceder, no es solo una pregunta de precios).\n\n` +
+        `Conversación reciente:\n${historyText}\n` +
+        `Último mensaje del cliente: "${customerMsg}"\n` +
+        `Última respuesta del bot: "${botReply}"\n\n` +
+        `Responde SOLO con JSON válido sin texto adicional:\n` +
+        `{"isOrder": true/false, "summary": "resumen del pedido si existe, incluyendo productos y cantidades"}`;
+
+    try {
+        const genAI = new GoogleGenerativeAI(GEMINI_API_KEY);
+        const model = genAI.getGenerativeModel({
+            model: 'gemini-2.0-flash',
+            generationConfig: { temperature: 0.1, maxOutputTokens: 300 }
+        });
+        const result = await model.generateContent(prompt);
+        const text = result.response.text().trim();
+        const jsonMatch = text.match(/\{[\s\S]*\}/);
+        if (jsonMatch) return JSON.parse(jsonMatch[0]);
+    } catch (e) {
+        console.error('[AI] Order detection error:', e.message);
+    }
+    return null;
+}
+
 module.exports = {
     getAIResponse,
     clearChatHistory,
     clearUserHistories,
-    fallbackResponse
+    fallbackResponse,
+    detectOrderConfirmation
 };
