@@ -1,0 +1,43 @@
+{
+  "businessName": "Tonkas",
+  "businessDescription": "vendemos los mejores tacos de minatitlan",
+  "menu": "tacos de pastor 10 pesos cada uno\ntaocos de asada 10 pesos cada uno\n",
+  "botPrompt": "actua como recepcionista, toma ordenes, pregunta direccion, con cuanto paga, cuantos tacos quiere, etc",
+  "schedule": {
+    "lunes": {
+      "open": "09:00",
+      "close": "18:00",
+      "active": true
+    },
+    "martes": {
+      "open": "09:00",
+      "close": "18:00",
+      "active": true
+    },
+    "miercoles": {
+      "open": "09:00",
+      "close": "18:00",
+      "active": true
+    },
+    "jueves": {
+      "open": "09:00",
+      "close": "18:00",
+      "active": true
+    },
+    "viernes": {
+      "open": "09:00",
+      "close": "18:00",
+      "active": true
+    },
+    "sabado": {
+      "open": "10:00",
+      "close": "14:00",
+      "active": true
+    },
+    "domingo": {
+      "open": "00:00",
+      "close": "00:00",
+      "active": false
+    }
+  }
+}

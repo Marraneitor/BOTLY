@@ -1,0 +1,29 @@
+{
+  "name": "whatsapp-bot-saas",
+  "version": "1.0.0",
+  "description": "WhatsApp Bot SaaS — Dashboard + WhatsApp client",
+  "main": "server.js",
+  "scripts": {
+    "dev": "node server.js",
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "@google/generative-ai": "^0.24.1",
+    "@whiskeysockets/baileys": "^6.7.21",
+    "compression": "^1.8.1",
+    "dotenv": "^17.3.1",
+    "express": "^4.22.1",
+    "firebase-admin": "^12.7.0",
+    "pino": "^10.3.1",
+    "qrcode": "^1.5.4",
+    "socket.io": "^4.7.5",
+    "stripe": "^20.3.1"
+  },
+  "keywords": [
+    "whatsapp",
+    "bot",
+    "saas"
+  ],
+  "author": "",
+  "license": "MIT"
+}

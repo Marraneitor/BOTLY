@@ -1,0 +1,1044 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <meta name="theme-color" content="#050507">
+    <meta name="color-scheme" content="dark">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="mobile-web-app-capable" content="yes">
+    <title>Botly — Dashboard</title>
+    <link rel="icon" type="image/png" href="./images/logo.png">
+    <!-- DNS prefetch for external resources -->
+    <link rel="dns-prefetch" href="https://cdn.socket.io">
+    <link rel="dns-prefetch" href="https://cdnjs.cloudflare.com">
+    <link rel="dns-prefetch" href="https://www.gstatic.com">
+    <link rel="dns-prefetch" href="https://fonts.googleapis.com">
+    <link rel="dns-prefetch" href="https://fonts.gstatic.com">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link rel="manifest" href="./manifest.json">
+    <!-- Critical CSS inline for faster FCP -->
+    <link rel="stylesheet" href="./styles.css">
+    <!-- Google Fonts – Inter (swap for fast text render) -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" media="print" onload="this.media='all'">
+    <!-- Socket.io client (deferred — not needed for initial render) -->
+    <script src="https://cdn.socket.io/4.7.5/socket.io.min.js" defer crossorigin="anonymous"></script>
+    <!-- QRCode.js (deferred — only used when QR section is shown) -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js" defer crossorigin="anonymous"></script>
+    <!-- Firebase Auth SDK (deferred) -->
+    <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js" defer></script>
+    <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js" defer></script>
+    <script src="./client.js" defer></script>
+    <script>if('serviceWorker' in navigator){window.addEventListener('load',()=>{navigator.serviceWorker.register('/sw.js').catch(()=>{});});}</script>
+</head>
+<body>
+    <!-- ========== SIDEBAR ========== -->
+    <aside class="sidebar" id="sidebar">
+        <div class="sidebar__brand">
+            <img class="sidebar__logo" src="./images/logo.png" alt="Botly">
+            <span>Botly</span>
+        </div>
+
+        <nav class="sidebar__nav">
+            <a href="#" class="sidebar__link sidebar__link--active" data-section="account">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+                Mi Cuenta
+            </a>
+            <a href="#" class="sidebar__link" data-section="config">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+                Configuración
+            </a>
+            <a href="#" class="sidebar__link" data-section="connection">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg>
+                Conexión
+            </a>
+            <a href="#" class="sidebar__link" data-section="messages">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+                Mensajes
+            </a>
+            <a href="#" class="sidebar__link" data-section="ventas">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
+                Ventas
+                <span class="sidebar__beta-badge">Beta</span>
+            </a>
+            <a href="#" class="sidebar__link" data-section="plans">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/></svg>
+                Planes
+            </a>
+            <a href="#" class="sidebar__link sidebar__link--admin" id="admin-link" data-section="admin" style="display:none;">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 15v2m-6 4h12a2 2 0 0 0 2-2v-6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v6a2 2 0 0 0 2 2zm10-10V7a4 4 0 0 0-8 0v4h8z"/></svg>
+                Admin
+            </a>
+        </nav>
+
+        <div class="sidebar__footer">
+            <button class="sidebar__logout" id="btn-logout">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
+                Cerrar sesión
+            </button>
+        </div>
+    </aside>
+
+    <!-- Mobile sidebar overlay (click to close) -->
+    <div class="sidebar-overlay" id="sidebar-overlay"></div>
+
+    <!-- Mobile hamburger -->
+    <button class="hamburger" id="hamburger" aria-label="Abrir menú">
+        <span></span><span></span><span></span>
+    </button>
+
+    <!-- ========== MAIN CONTENT ========== -->
+    <main class="main">
+        <!-- ---- SECTION: Dashboard ---- -->
+        <!-- section-dashboard removed: merged into section-account -->
+
+        <!-- ---- SECTION: Configuración del Bot ---- -->
+        <section class="section section--hidden" id="section-config">
+            <h1 class="section__title">Configuración del Bot</h1>
+            <p class="section__subtitle">Personaliza cómo tu bot responde a tus clientes.</p>
+
+            <form class="form" id="config-form" autocomplete="off">
+                <!-- Nombre del negocio -->
+                <div class="form__group">
+                    <label class="form__label" for="businessName">Nombre del negocio</label>
+                    <input class="form__input" type="text" id="businessName" name="businessName" placeholder="Ej: Pizzería Don Mario" required>
+                </div>
+
+                <!-- Descripción del negocio -->
+                <div class="form__group">
+                    <label class="form__label" for="businessDescription">Descripción del negocio</label>
+                    <textarea class="form__textarea" id="businessDescription" name="businessDescription" rows="3" placeholder="Breve descripción de lo que ofreces..."></textarea>
+                </div>
+
+                <!-- Horarios de atención -->
+                <fieldset class="form__fieldset">
+                    <legend class="form__legend">Horarios de atención</legend>
+                    <div class="schedule-grid">
+                        <div class="schedule-row" data-day="lunes">
+                            <label class="schedule-row__day">Lunes</label>
+                            <input class="form__input form__input--sm" type="time" name="schedule_lunes_open" value="09:00">
+                            <span class="schedule-row__sep">a</span>
+                            <input class="form__input form__input--sm" type="time" name="schedule_lunes_close" value="18:00">
+                            <label class="toggle"><input type="checkbox" name="schedule_lunes_active" checked><span class="toggle__slider"></span></label>
+                        </div>
+                        <div class="schedule-row" data-day="martes">
+                            <label class="schedule-row__day">Martes</label>
+                            <input class="form__input form__input--sm" type="time" name="schedule_martes_open" value="09:00">
+                            <span class="schedule-row__sep">a</span>
+                            <input class="form__input form__input--sm" type="time" name="schedule_martes_close" value="18:00">
+                            <label class="toggle"><input type="checkbox" name="schedule_martes_active" checked><span class="toggle__slider"></span></label>
+                        </div>
+                        <div class="schedule-row" data-day="miercoles">
+                            <label class="schedule-row__day">Miércoles</label>
+                            <input class="form__input form__input--sm" type="time" name="schedule_miercoles_open" value="09:00">
+                            <span class="schedule-row__sep">a</span>
+                            <input class="form__input form__input--sm" type="time" name="schedule_miercoles_close" value="18:00">
+                            <label class="toggle"><input type="checkbox" name="schedule_miercoles_active" checked><span class="toggle__slider"></span></label>
+                        </div>
+                        <div class="schedule-row" data-day="jueves">
+                            <label class="schedule-row__day">Jueves</label>
+                            <input class="form__input form__input--sm" type="time" name="schedule_jueves_open" value="09:00">
+                            <span class="schedule-row__sep">a</span>
+                            <input class="form__input form__input--sm" type="time" name="schedule_jueves_close" value="18:00">
+                            <label class="toggle"><input type="checkbox" name="schedule_jueves_active" checked><span class="toggle__slider"></span></label>
+                        </div>
+                        <div class="schedule-row" data-day="viernes">
+                            <label class="schedule-row__day">Viernes</label>
+                            <input class="form__input form__input--sm" type="time" name="schedule_viernes_open" value="09:00">
+                            <span class="schedule-row__sep">a</span>
+                            <input class="form__input form__input--sm" type="time" name="schedule_viernes_close" value="18:00">
+                            <label class="toggle"><input type="checkbox" name="schedule_viernes_active" checked><span class="toggle__slider"></span></label>
+                        </div>
+                        <div class="schedule-row" data-day="sabado">
+                            <label class="schedule-row__day">Sábado</label>
+                            <input class="form__input form__input--sm" type="time" name="schedule_sabado_open" value="10:00">
+                            <span class="schedule-row__sep">a</span>
+                            <input class="form__input form__input--sm" type="time" name="schedule_sabado_close" value="14:00">
+                            <label class="toggle"><input type="checkbox" name="schedule_sabado_active" checked><span class="toggle__slider"></span></label>
+                        </div>
+                        <div class="schedule-row" data-day="domingo">
+                            <label class="schedule-row__day">Domingo</label>
+                            <input class="form__input form__input--sm" type="time" name="schedule_domingo_open" value="00:00">
+                            <span class="schedule-row__sep">a</span>
+                            <input class="form__input form__input--sm" type="time" name="schedule_domingo_close" value="00:00">
+                            <label class="toggle"><input type="checkbox" name="schedule_domingo_active"><span class="toggle__slider"></span></label>
+                        </div>
+                    </div>
+                </fieldset>
+
+                <!-- Menú de productos/servicios -->
+                <div class="form__group">
+                    <label class="form__label" for="menu">Menú de productos / servicios</label>
+                    <textarea class="form__textarea form__textarea--lg" id="menu" name="menu" rows="10" placeholder="Escribe tu menú aquí. Ejemplo:&#10;🍕 Pizza Margarita — $8.00&#10;🍕 Pizza Pepperoni — $9.50&#10;🥤 Refresco 500ml — $2.00"></textarea>
+                </div>
+
+                <!-- Prompt personalizado -->
+                <div class="form__group">
+                    <label class="form__label" for="botPrompt">Contexto / Personalidad del Bot (Prompt para Gemini)</label>
+                    <textarea class="form__textarea form__textarea--lg" id="botPrompt" name="botPrompt" rows="8" placeholder="Ej: Eres un asistente amable de la Pizzería Don Mario. Responde en español, sé breve y ofrece el menú cuando te lo pidan..."></textarea>
+                    <span class="form__hint">Este texto se envía a Gemini como instrucciones del sistema. Define el tono, idioma y comportamiento del bot.</span>
+                </div>
+
+                <!-- Actions -->
+                <div class="form__actions">
+                    <button type="submit" class="btn btn--primary btn--lg" id="btn-save">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>
+                        Guardar configuración
+                    </button>
+                    <button type="button" class="btn btn--ghost" id="btn-reset-draft">Descartar borrador</button>
+                </div>
+            </form>
+
+            <!-- Toast notification -->
+            <div class="toast" id="toast" role="alert"></div>
+        </section>
+
+        <!-- ---- SECTION: Conexión WhatsApp ---- -->
+        <section class="section section--hidden" id="section-connection">
+            <h1 class="section__title">Conexión WhatsApp</h1>
+            <p class="section__subtitle">Escanea el código QR con tu app de WhatsApp para vincular el bot.</p>
+
+            <div class="connection-panel">
+                <div class="qr-container" id="qr-container">
+                    <div class="qr-placeholder" id="qr-placeholder">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" class="qr-placeholder__icon">
+                            <rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><circle cx="17.5" cy="17.5" r="3.5"/>
+                        </svg>
+                        <p>Esperando código QR…</p>
+                        <span class="qr-placeholder__hint">Asegúrate de haber guardado tu configuración primero.</span>
+                    </div>
+                    <div id="qr-canvas" class="qr-canvas qr-canvas--hidden"></div>
+                </div>
+
+                <div class="connection-info">
+                    <div class="connection-status" id="connection-status">
+                        <span class="status-dot status-dot--off" id="conn-dot"></span>
+                        <span id="conn-label">Desconectado</span>
+                    </div>
+
+                    <div class="connection-steps">
+                        <h3>Instrucciones</h3>
+                        <ol>
+                            <li>Guarda tu configuración en la sección anterior.</li>
+                            <li>Haz clic en <strong>"Iniciar Bot"</strong> abajo.</li>
+                            <li>Abre WhatsApp en tu teléfono.</li>
+                            <li>Ve a <strong>Ajustes → Dispositivos vinculados → Vincular dispositivo</strong>.</li>
+                            <li>Escanea el código QR que aparecerá aquí.</li>
+                        </ol>
+                    </div>
+
+                    <div class="connection-actions">
+                        <button class="btn btn--success btn--lg" id="btn-start-bot">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+                            Iniciar Bot
+                        </button>
+                        <button class="btn btn--danger" id="btn-stop-bot" disabled>
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="6" y="6" width="12" height="12"/></svg>
+                            Detener Bot
+                        </button>
+                        <button class="btn btn--warning" id="btn-reset-bot">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M23 4v6h-6"/><path d="M1 20v-6h6"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
+                            Formatear dispositivos (nuevo QR)
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- ---- SECTION: Mensajes (Inbox) ---- -->
+        <section class="section section--hidden" id="section-messages">
+
+            <!-- TABS: Conversaciones / Filtros / Mensajes Programados -->
+            <div class="msg-tabs">
+                <button class="msg-tab msg-tab--active" data-msg-tab="inbox">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+                    Conversaciones
+                </button>
+                <button class="msg-tab" data-msg-tab="filters">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16"><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/></svg>
+                    Filtros de respuesta
+                </button>
+                <button class="msg-tab" data-msg-tab="scheduled">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+                    Mensajes programados
+                </button>
+            </div>
+
+            <!-- ═══ TAB: INBOX (Conversaciones) ═══ -->
+            <div class="msg-tab-content msg-tab-content--active" id="msg-tab-inbox">
+
+                <!-- Pause banner (global bot pause) -->
+                <div class="pause-banner pause-banner--hidden" id="pause-banner">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="20" height="20"><rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/></svg>
+                    <span>El bot está <strong>pausado</strong> — los mensajes se reciben pero no se responden automáticamente.</span>
+                </div>
+
+                <div id="inbox-view">
+                    <div class="inbox-header">
+                        <div class="inbox-header__left">
+                            <h1 class="section__title">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="22" height="22" style="vertical-align:middle;margin-right:.4rem;opacity:.6"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+                                Conversaciones
+                            </h1>
+                            <span class="inbox-header__count" id="inbox-count">0 chats</span>
+                        </div>
+                        <div class="inbox-header__actions">
+                            <!-- Pause/Resume bot toggle -->
+                            <button class="btn btn--pause btn--sm" id="btn-pause-bot" disabled title="Pausar bot">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16"><rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/></svg>
+                                <span id="pause-bot-label">Pausar</span>
+                            </button>
+                            <!-- Response mode toggle -->
+                            <div class="response-mode-toggle" id="response-mode-toggle">
+                                <span class="response-mode-label" id="response-mode-label">Automático</span>
+                                <label class="toggle">
+                                    <input type="checkbox" id="response-mode-switch">
+                                    <span class="toggle__slider"></span>
+                                </label>
+                                <span class="response-mode-label response-mode-label--alt" id="response-mode-label-alt">Semi-auto</span>
+                            </div>
+                            <div class="inbox-search-wrap">
+                                <svg class="inbox-search-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="15" height="15"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+                                <input class="form__input inbox-search" type="text" id="inbox-search" placeholder="Buscar contacto...">
+                            </div>
+                            <button class="btn btn--danger btn--sm" id="btn-clear-messages" title="Borrar historial">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Pending message alert (semi-auto mode) -->
+                    <div class="pending-alert pending-alert--hidden" id="pending-alert">
+                        <div class="pending-alert__icon">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
+                        </div>
+                        <div class="pending-alert__body">
+                            <strong id="pending-alert-name">Contacto</strong>
+                            <p id="pending-alert-text">Mensaje pendiente...</p>
+                        </div>
+                        <div class="pending-alert__actions">
+                            <button class="btn btn--primary btn--sm" id="btn-approve-reply">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14"><path d="M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20z"/><path d="M12 8v4l3 3"/></svg>
+                                Responder con Bot
+                            </button>
+                            <button class="btn btn--outline btn--sm" id="btn-manual-reply">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+                                Manual
+                            </button>
+                            <button class="btn btn--ghost btn--sm" id="btn-dismiss-alert">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                            </button>
+                        </div>
+                    </div>
+
+                    <div class="inbox-empty" id="inbox-empty">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+                        <p>No hay conversaciones aún.</p>
+                        <span>Los mensajes aparecerán aquí cuando alguien escriba al bot.</span>
+                    </div>
+
+                    <div class="inbox-list" id="inbox-list"></div>
+                </div>
+
+                <!-- CHAT VIEW: single conversation -->
+                <div id="chat-view" class="chat-view chat-view--hidden">
+                    <div class="chat-topbar">
+                        <button class="btn btn--ghost btn--icon" id="btn-back-inbox">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="15 18 9 12 15 6"/></svg>
+                        </button>
+                        <div class="chat-topbar__info">
+                            <span class="chat-topbar__name" id="chat-contact-name">Contacto</span>
+                            <span class="chat-topbar__phone" id="chat-contact-phone">+00 000 000 0000</span>
+                        </div>
+                        <div class="chat-topbar__status">
+                            <button class="btn btn--ghost btn--sm chat-pause-btn" id="btn-pause-chat" title="Pausar bot en este chat">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16"><rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/></svg>
+                                <span id="pause-btn-label">Pausar</span>
+                            </button>
+                            <span class="status-dot status-dot--on" id="chat-bot-dot"></span>
+                            <span id="chat-bot-label">Bot activo</span>
+                        </div>
+                    </div>
+
+                    <div class="chat-messages" id="chat-messages"></div>
+
+                    <div class="chat-input-bar">
+                        <textarea class="chat-input" id="chat-input" rows="1" placeholder="Escribe un mensaje manual..."></textarea>
+                        <button class="btn btn--primary btn--icon" id="btn-send-message">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- ═══ TAB: FILTROS DE RESPUESTA ═══ -->
+            <div class="msg-tab-content" id="msg-tab-filters">
+                <div class="filters-panel">
+                    <div class="filters-panel__header">
+                        <h2 class="filters-panel__title">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="20" height="20"><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/></svg>
+                            Filtros de respuesta
+                        </h2>
+                        <p class="filters-panel__desc">Configura a quién responde tu bot automáticamente.</p>
+                    </div>
+
+                    <div class="filters-grid">
+                        <!-- Contactos guardados -->
+                        <div class="filter-card">
+                            <div class="filter-card__icon filter-card__icon--green">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+                            </div>
+                            <div class="filter-card__body">
+                                <h3>Contactos guardados</h3>
+                                <p>Responder a contactos que tienes guardados en tu teléfono.</p>
+                            </div>
+                            <label class="toggle">
+                                <input type="checkbox" id="filter-saved-contacts" checked>
+                                <span class="toggle__slider"></span>
+                            </label>
+                        </div>
+
+                        <!-- Contactos NO guardados -->
+                        <div class="filter-card">
+                            <div class="filter-card__icon filter-card__icon--blue">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="8.5" cy="7" r="4"/><line x1="20" y1="8" x2="20" y2="14"/><line x1="23" y1="11" x2="17" y2="11"/></svg>
+                            </div>
+                            <div class="filter-card__body">
+                                <h3>Contactos no guardados</h3>
+                                <p>Responder a números desconocidos que te escriban.</p>
+                            </div>
+                            <label class="toggle">
+                                <input type="checkbox" id="filter-unsaved-contacts" checked>
+                                <span class="toggle__slider"></span>
+                            </label>
+                        </div>
+
+                        <!-- Grupos -->
+                        <div class="filter-card">
+                            <div class="filter-card__icon filter-card__icon--purple">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+                            </div>
+                            <div class="filter-card__body">
+                                <h3>Grupos de WhatsApp</h3>
+                                <p>Permitir que el bot responda mensajes en grupos.</p>
+                            </div>
+                            <label class="toggle">
+                                <input type="checkbox" id="filter-groups">
+                                <span class="toggle__slider"></span>
+                            </label>
+                        </div>
+                    </div>
+
+                    <!-- Group selector (shown only when groups enabled) -->
+                    <div class="group-selector" id="group-selector" style="display:none;">
+                        <div class="group-selector__header">
+                            <h3>
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+                                Seleccionar grupos
+                            </h3>
+                            <p>Elige en cuáles grupos el bot debe responder. Si no seleccionas ninguno, responderá en todos.</p>
+                        </div>
+                        <div class="group-selector__list" id="group-list">
+                            <div class="group-selector__empty">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" width="32" height="32"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+                                <p>Conecta tu bot primero para ver los grupos disponibles.</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="filters-actions">
+                        <button class="btn btn--primary" id="btn-save-filters">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>
+                            Guardar filtros
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- ═══ TAB: MENSAJES PROGRAMADOS ═══ -->
+            <div class="msg-tab-content" id="msg-tab-scheduled">
+                <div class="scheduled-panel">
+                    <div class="scheduled-panel__header">
+                        <h2 class="scheduled-panel__title">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="20" height="20"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+                            Mensajes recurrentes
+                        </h2>
+                        <p class="scheduled-panel__desc">Programa mensajes automáticos que se enviarán a grupos periódicamente.</p>
+                    </div>
+
+                    <!-- New scheduled message form -->
+                    <div class="scheduled-form" id="scheduled-form">
+                        <div class="scheduled-form__row">
+                            <div class="scheduled-form__field">
+                                <label>Grupo destino</label>
+                                <select class="form__input" id="sched-group-select">
+                                    <option value="">— Selecciona un grupo —</option>
+                                </select>
+                            </div>
+                            <div class="scheduled-form__field scheduled-form__field--interval">
+                                <label>Enviar cada</label>
+                                <div class="scheduled-form__interval">
+                                    <input type="number" class="form__input" id="sched-interval-value" min="1" max="999" value="1" style="width:70px;">
+                                    <select class="form__input" id="sched-interval-unit">
+                                        <option value="minutes">Minutos</option>
+                                        <option value="hours" selected>Horas</option>
+                                        <option value="days">Días</option>
+                                    </select>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="scheduled-form__field">
+                            <label>Mensaje</label>
+                            <textarea class="form__input" id="sched-message" rows="3" placeholder="Escribe el mensaje que se enviará al grupo..."></textarea>
+                        </div>
+                        <div class="scheduled-form__actions">
+                            <button class="btn btn--primary" id="btn-add-scheduled">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+                                Agregar mensaje programado
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Active scheduled messages list -->
+                    <div class="scheduled-list" id="scheduled-list">
+                        <div class="scheduled-list__empty" id="scheduled-empty">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" width="48" height="48"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+                            <p>No hay mensajes programados.</p>
+                            <span>Crea uno arriba para enviar mensajes recurrentes a tus grupos.</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+        </section>
+
+        <!-- ---- SECTION: Planes / Suscripción ---- -->
+        <section class="section section--hidden" id="section-plans">
+            <h1 class="section__title">Planes</h1>
+            <p class="section__subtitle">Elige el plan que mejor se adapte a tu negocio.</p>
+
+            <!-- Subscription status banner -->
+            <div class="sub-status" id="sub-status" style="display:none;">
+                <div class="sub-status__icon">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
+                </div>
+                <div class="sub-status__info">
+                    <strong id="sub-status-plan">Plan Activo</strong>
+                    <span id="sub-status-expires">Expira: --</span>
+                </div>
+                <span class="sub-status__badge" id="sub-status-badge">Activo</span>
+            </div>
+
+            <!-- Plans grid -->
+            <div class="plans-grid">
+                <!-- Plan Mensual -->
+                <div class="plan-card" data-plan="monthly">
+                    <div class="plan-card__header">
+                        <h3 class="plan-card__name">Mensual</h3>
+                        <p class="plan-card__desc">Ideal para probar Botly</p>
+                    </div>
+                    <div class="plan-card__price">
+                        <span class="plan-card__amount">$99</span>
+                        <span class="plan-card__currency">MXN / mes</span>
+                    </div>
+                    <ul class="plan-card__features">
+                        <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg> Bot de WhatsApp con IA</li>
+                        <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg> Mensajes ilimitados</li>
+                        <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg> Dashboard completo</li>
+                        <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg> 1 mes de acceso</li>
+                    </ul>
+                    <button class="btn btn--outline btn--block btn-subscribe" data-plan="monthly">
+                        Suscribirse
+                    </button>
+                </div>
+
+                <!-- Plan Trimestral -->
+                <div class="plan-card plan-card--popular" data-plan="quarterly">
+                    <div class="plan-card__badge">+1 mes gratis</div>
+                    <div class="plan-card__header">
+                        <h3 class="plan-card__name">Trimestral</h3>
+                        <p class="plan-card__desc">El más popular</p>
+                    </div>
+                    <div class="plan-card__price">
+                        <span class="plan-card__amount">$299</span>
+                        <span class="plan-card__currency">MXN / 3 meses</span>
+                    </div>
+                    <div class="plan-card__savings">Pagas 3, recibes 4 meses — 25% OFF</div>
+                    <ul class="plan-card__features">
+                        <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg> Bot de WhatsApp con IA</li>
+                        <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg> Mensajes ilimitados</li>
+                        <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg> Dashboard completo</li>
+                        <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg> 4 meses de acceso</li>
+                        <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg> <strong>1 mes de regalo</strong></li>
+                    </ul>
+                    <button class="btn btn--primary btn--block btn-subscribe" data-plan="quarterly">
+                        Suscribirse — Más popular
+                    </button>
+                </div>
+
+                <!-- Plan Anual -->
+                <div class="plan-card" data-plan="yearly">
+                    <div class="plan-card__badge plan-card__badge--gold">+6 meses gratis</div>
+                    <div class="plan-card__header">
+                        <h3 class="plan-card__name">Anual</h3>
+                        <p class="plan-card__desc">Mejor valor</p>
+                    </div>
+                    <div class="plan-card__price">
+                        <span class="plan-card__amount">$999</span>
+                        <span class="plan-card__currency">MXN / año</span>
+                    </div>
+                    <div class="plan-card__savings">Pagas 12, recibes 18 meses — 54% OFF</div>
+                    <ul class="plan-card__features">
+                        <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg> Bot de WhatsApp con IA</li>
+                        <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg> Mensajes ilimitados</li>
+                        <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg> Dashboard completo</li>
+                        <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg> 18 meses de acceso</li>
+                        <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg> <strong>6 meses de regalo</strong></li>
+                    </ul>
+                    <button class="btn btn--outline btn--block btn-subscribe" data-plan="yearly">
+                        Suscribirse — Mejor valor
+                    </button>
+                </div>
+            </div>
+
+            <!-- Payment method info -->
+            <div class="plans-footer">
+                <div class="plans-footer__secure">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+                    <span>Pago seguro con Stripe. Aceptamos Visa, Mastercard, AMEX y más.</span>
+                </div>
+            </div>
+        </section>
+
+        <!-- ---- SECTION: Ventas (V2) ---- -->
+        <section class="section section--hidden" id="section-ventas">
+            <div class="ventas-header">
+                <div class="ventas-header__left">
+                    <h1 class="section__title">
+                        Ventas &amp; Oportunidades
+                        <span class="beta-tag">V2</span>
+                    </h1>
+                    <p class="section__subtitle">Detección inteligente de ventas, clientes abandonados y oportunidades de seguimiento.</p>
+                </div>
+                <div class="ventas-header__actions">
+                    <button class="btn btn--outline btn--sm" id="btn-load-ventas" title="Cargar último análisis guardado">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"/></svg>
+                        Historial
+                    </button>
+                    <button class="btn btn--primary btn--lg" id="btn-analyze-ventas">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg>
+                        Analizar conversaciones
+                    </button>
+                </div>
+            </div>
+
+            <!-- Stats summary cards -->
+            <div class="ventas-stats" id="ventas-stats" style="display:none;">
+                <div class="ventas-stat-card ventas-stat-card--sales">
+                    <div class="ventas-stat-card__icon">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
+                    </div>
+                    <div class="ventas-stat-card__body">
+                        <span class="ventas-stat-card__value" id="ventas-total-sales">0</span>
+                        <span class="ventas-stat-card__label">Ventas confirmadas</span>
+                    </div>
+                </div>
+                <div class="ventas-stat-card ventas-stat-card--abandoned">
+                    <div class="ventas-stat-card__icon">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+                    </div>
+                    <div class="ventas-stat-card__body">
+                        <span class="ventas-stat-card__value" id="ventas-total-abandoned">0</span>
+                        <span class="ventas-stat-card__label">Casi compraron</span>
+                    </div>
+                </div>
+                <div class="ventas-stat-card ventas-stat-card--appointments">
+                    <div class="ventas-stat-card__icon">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+                    </div>
+                    <div class="ventas-stat-card__body">
+                        <span class="ventas-stat-card__value" id="ventas-total-appointments">0</span>
+                        <span class="ventas-stat-card__label">Citas agendadas</span>
+                    </div>
+                </div>
+                <div class="ventas-stat-card ventas-stat-card--leads">
+                    <div class="ventas-stat-card__icon">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+                    </div>
+                    <div class="ventas-stat-card__body">
+                        <span class="ventas-stat-card__value" id="ventas-total-leads">0</span>
+                        <span class="ventas-stat-card__label">Leads interesados</span>
+                    </div>
+                </div>
+                <div class="ventas-stat-card ventas-stat-card--conversations">
+                    <div class="ventas-stat-card__icon">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+                    </div>
+                    <div class="ventas-stat-card__body">
+                        <span class="ventas-stat-card__value" id="ventas-total-analyzed">0</span>
+                        <span class="ventas-stat-card__label">Analizadas</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Sales Funnel (shown after analysis) -->
+            <div class="ventas-funnel" id="ventas-funnel" style="display:none;">
+                <h3 class="ventas-funnel__title">Embudo de ventas</h3>
+                <div class="ventas-funnel__bar">
+                    <div class="ventas-funnel__segment ventas-funnel__segment--leads" id="funnel-leads" title="Leads">
+                        <span class="ventas-funnel__segment-label">Leads</span>
+                    </div>
+                    <div class="ventas-funnel__segment ventas-funnel__segment--abandoned" id="funnel-abandoned" title="Abandonados">
+                        <span class="ventas-funnel__segment-label">Abandonados</span>
+                    </div>
+                    <div class="ventas-funnel__segment ventas-funnel__segment--appointments" id="funnel-appointments" title="Citas">
+                        <span class="ventas-funnel__segment-label">Citas</span>
+                    </div>
+                    <div class="ventas-funnel__segment ventas-funnel__segment--sales" id="funnel-sales" title="Ventas">
+                        <span class="ventas-funnel__segment-label">Ventas</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Loading state -->
+            <div class="ventas-loading" id="ventas-loading" style="display:none;">
+                <div class="ventas-loading__spinner"></div>
+                <p class="ventas-loading__text">Analizando conversaciones con IA...</p>
+                <p class="ventas-loading__subtext">Detectando ventas, abandonos y oportunidades</p>
+            </div>
+
+            <!-- Empty state -->
+            <div class="ventas-empty" id="ventas-empty">
+                <div class="ventas-empty__icon">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" width="64" height="64">
+                        <path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/>
+                    </svg>
+                </div>
+                <h3>Descubre tus ventas ocultas</h3>
+                <p>La IA analizará tus conversaciones para detectar <strong>ventas completadas</strong>, <strong>clientes que casi compraron</strong> y <strong>oportunidades de seguimiento</strong>.</p>
+                <p class="ventas-empty__hint">Podrás enviar mensajes de seguimiento a quienes abandonaron la compra.</p>
+            </div>
+
+            <!-- Results list -->
+            <div class="ventas-results" id="ventas-results" style="display:none;">
+                <div class="ventas-results__header">
+                    <h2>Resultados del análisis</h2>
+                    <div class="ventas-results__filters">
+                        <button class="ventas-filter ventas-filter--active" data-filter="all">Todos</button>
+                        <button class="ventas-filter" data-filter="abandoned">🔥 Abandonados</button>
+                        <button class="ventas-filter" data-filter="sale">💰 Ventas</button>
+                        <button class="ventas-filter" data-filter="appointment">📅 Citas</button>
+                        <button class="ventas-filter" data-filter="lead">👤 Leads</button>
+                        <button class="ventas-filter" data-filter="no_result">Sin resultado</button>
+                    </div>
+                </div>
+                <div class="ventas-list" id="ventas-list"></div>
+            </div>
+
+            <!-- Follow-up modal -->
+            <div class="ventas-modal-overlay" id="ventas-followup-modal" style="display:none;">
+                <div class="ventas-modal">
+                    <div class="ventas-modal__header">
+                        <h3>Enviar seguimiento</h3>
+                        <button class="ventas-modal__close" id="ventas-modal-close">&times;</button>
+                    </div>
+                    <div class="ventas-modal__body">
+                        <p class="ventas-modal__contact" id="ventas-modal-contact"></p>
+                        <label class="ventas-modal__label">Mensaje sugerido por la IA:</label>
+                        <textarea class="form__input ventas-modal__textarea" id="ventas-followup-text" rows="4" placeholder="Escribe tu mensaje de seguimiento..."></textarea>
+                    </div>
+                    <div class="ventas-modal__footer">
+                        <button class="btn btn--outline btn--sm" id="ventas-modal-cancel">Cancelar</button>
+                        <button class="btn btn--primary btn--sm" id="ventas-modal-send">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
+                            Enviar por WhatsApp
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- ---- SECTION: Mi Cuenta ---- -->
+        <section class="section" id="section-account">
+            <h1 class="section__title">Mi Cuenta</h1>
+            <p class="section__subtitle">Resumen de tu actividad y configuración de cuenta.</p>
+
+            <!-- User profile card -->
+            <div class="account-profile" id="account-profile">
+                <div class="account-profile__avatar" id="account-avatar"></div>
+                <div class="account-profile__info">
+                    <h2 class="account-profile__name" id="account-name">—</h2>
+                    <p class="account-profile__email" id="account-email">—</p>
+                    <div class="account-profile__plan" id="account-plan-badge">—</div>
+                </div>
+            </div>
+
+            <!-- Dashboard cards (real-time via socket) -->
+            <div class="cards">
+                <div class="card card--status" id="card-status">
+                    <div class="card__icon card__icon--disconnected" id="status-icon">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/></svg>
+                    </div>
+                    <div class="card__body">
+                        <span class="card__label">Estado del Bot</span>
+                        <strong class="card__value" id="status-text">Desconectado</strong>
+                    </div>
+                </div>
+                <div class="card">
+                    <div class="card__icon">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+                    </div>
+                    <div class="card__body">
+                        <span class="card__label">Mensajes hoy</span>
+                        <strong class="card__value" id="messages-today">0</strong>
+                    </div>
+                </div>
+                <div class="card">
+                    <div class="card__icon">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/></svg>
+                    </div>
+                    <div class="card__body">
+                        <span class="card__label">Contactos atendidos</span>
+                        <strong class="card__value" id="contacts-count">0</strong>
+                    </div>
+                </div>
+            </div>
+
+            <div class="quick-actions">
+                <h2 class="quick-actions__title">Acciones rápidas</h2>
+                <button class="btn btn--primary" data-goto="config">Editar configuración</button>
+                <button class="btn btn--success" data-goto="connection">Ver conexión QR</button>
+            </div>
+
+            <!-- Stats grid -->
+            <div class="account-stats" id="account-stats">
+                <div class="account-stat">
+                    <div class="account-stat__icon account-stat__icon--messages">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+                    </div>
+                    <div class="account-stat__value" id="acct-total-conversations">—</div>
+                    <div class="account-stat__label">Conversaciones</div>
+                </div>
+                <div class="account-stat">
+                    <div class="account-stat__icon account-stat__icon--incoming">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="22 12 16 12 14 15 10 15 8 12 2 12"/><path d="M5.45 5.11L2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"/></svg>
+                    </div>
+                    <div class="account-stat__value" id="acct-total-incoming">—</div>
+                    <div class="account-stat__label">Mensajes recibidos</div>
+                </div>
+                <div class="account-stat">
+                    <div class="account-stat__icon account-stat__icon--outgoing">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
+                    </div>
+                    <div class="account-stat__value" id="acct-total-outgoing">—</div>
+                    <div class="account-stat__label">Respuestas del bot</div>
+                </div>
+                <div class="account-stat">
+                    <div class="account-stat__icon account-stat__icon--sales">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
+                    </div>
+                    <div class="account-stat__value" id="acct-sales-completed">—</div>
+                    <div class="account-stat__label">Ventas concretadas</div>
+                </div>
+                <div class="account-stat">
+                    <div class="account-stat__icon account-stat__icon--leads">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+                    </div>
+                    <div class="account-stat__value" id="acct-leads">—</div>
+                    <div class="account-stat__label">Leads captados</div>
+                </div>
+                <div class="account-stat">
+                    <div class="account-stat__icon account-stat__icon--today">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+                    </div>
+                    <div class="account-stat__value" id="acct-today-msgs">—</div>
+                    <div class="account-stat__label">Mensajes hoy</div>
+                </div>
+            </div>
+
+            <!-- Subscription info -->
+            <div class="account-subscription" id="account-subscription">
+                <h3 class="account-section-title">Suscripción</h3>
+                <div class="account-sub-card" id="account-sub-card">
+                    <div class="account-sub-card__row">
+                        <span class="account-sub-card__label">Plan actual</span>
+                        <span class="account-sub-card__value" id="acct-sub-plan">—</span>
+                    </div>
+                    <div class="account-sub-card__row">
+                        <span class="account-sub-card__label">Estado</span>
+                        <span class="account-sub-card__value" id="acct-sub-status">—</span>
+                    </div>
+                    <div class="account-sub-card__row">
+                        <span class="account-sub-card__label">Vence</span>
+                        <span class="account-sub-card__value" id="acct-sub-expires">—</span>
+                    </div>
+                    <button class="btn btn--primary btn--sm" data-goto="plans">Cambiar plan</button>
+                </div>
+            </div>
+
+            <!-- Bot status -->
+            <div class="account-bot-status">
+                <h3 class="account-section-title">Estado del Bot</h3>
+                <div class="account-sub-card">
+                    <div class="account-sub-card__row">
+                        <span class="account-sub-card__label">Conexión</span>
+                        <span class="account-sub-card__value" id="acct-bot-status">—</span>
+                    </div>
+                    <button class="btn btn--ghost btn--sm" data-goto="connection">Ir a Conexión</button>
+                </div>
+            </div>
+
+            <!-- Danger zone -->
+            <div class="account-danger">
+                <h3 class="account-section-title">Sesión</h3>
+                <p class="account-danger__text">Cerrar sesión desvinculará tu navegador. El bot seguirá activo si está conectado.</p>
+                <button class="btn btn--danger" id="btn-logout-account">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
+                    Cerrar sesión
+                </button>
+            </div>
+        </section>
+
+        <!-- ---- SECTION: Admin Panel ---- -->
+        <section class="section section--hidden" id="section-admin">
+            <h1 class="section__title">
+                Panel de Administración
+                <span class="admin-inline-badge">ADMIN</span>
+            </h1>
+            <p class="section__subtitle">Gestiona usuarios, suscripciones y conversaciones.</p>
+
+            <!-- Admin KPI cards -->
+            <div class="admin-kpi-row" id="admin-kpi-row">
+                <div class="admin-kpi">
+                    <span class="admin-kpi__val" id="admin-kpi-total">—</span>
+                    <span class="admin-kpi__label">Usuarios totales</span>
+                </div>
+                <div class="admin-kpi admin-kpi--green">
+                    <span class="admin-kpi__val" id="admin-kpi-active">—</span>
+                    <span class="admin-kpi__label">Suscripciones activas</span>
+                </div>
+                <div class="admin-kpi admin-kpi--red">
+                    <span class="admin-kpi__val" id="admin-kpi-expired">—</span>
+                    <span class="admin-kpi__label">Expiradas</span>
+                </div>
+                <div class="admin-kpi admin-kpi--blue">
+                    <span class="admin-kpi__val" id="admin-kpi-bots">—</span>
+                    <span class="admin-kpi__label">Bots activos</span>
+                </div>
+            </div>
+
+            <!-- Users table -->
+            <div class="admin-users-card">
+                <div class="admin-users-card__header">
+                    <h2>Usuarios registrados</h2>
+                    <button class="btn btn--sm btn--outline" id="btn-admin-refresh">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
+                        Actualizar
+                    </button>
+                </div>
+                <div class="admin-users-table-wrap">
+                    <table class="admin-users-table" id="admin-users-table">
+                        <thead>
+                            <tr>
+                                <th>Usuario</th>
+                                <th>Plan</th>
+                                <th>Estado</th>
+                                <th>Tiempo restante</th>
+                                <th>Bot</th>
+                                <th>Acciones</th>
+                            </tr>
+                        </thead>
+                        <tbody id="admin-users-tbody"></tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- User detail modal (conversations + gift) -->
+            <div class="admin-modal-overlay" id="admin-user-modal" style="display:none;">
+                <div class="admin-modal">
+                    <div class="admin-modal__header">
+                        <h2 id="admin-modal-title">Detalles del usuario</h2>
+                        <button class="admin-modal__close" id="admin-modal-close">&times;</button>
+                    </div>
+                    <div class="admin-modal__body">
+                        <!-- User info -->
+                        <div class="admin-modal__info" id="admin-modal-info"></div>
+
+                        <!-- Gift time -->
+                        <div class="admin-modal__gift">
+                            <h3>🎁 Regalar tiempo</h3>
+                            <div class="admin-gift-btns">
+                                <button class="btn btn--sm btn--outline admin-gift-btn" data-gift="1day">+1 Día</button>
+                                <button class="btn btn--sm btn--outline admin-gift-btn" data-gift="1week">+1 Semana</button>
+                                <button class="btn btn--sm btn--primary admin-gift-btn" data-gift="1month">+1 Mes</button>
+                            </div>
+                            <p class="admin-gift-result" id="admin-gift-result"></p>
+                        </div>
+
+                        <!-- Conversations -->
+                        <div class="admin-modal__convos">
+                            <h3>💬 Conversaciones (<span id="admin-convos-count">0</span>)</h3>
+                            <div class="admin-convos-loading" id="admin-convos-loading" style="display:none;">
+                                <div class="admin-convos-spinner"></div> Cargando...
+                            </div>
+                            <div class="admin-convos-list" id="admin-convos-list"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+    </main>
+
+    <!-- ========== TRIAL / SUBSCRIPTION EXPIRED MODAL ========== -->
+    <div class="trial-modal-overlay" id="trial-modal" style="display:none;">
+        <div class="trial-modal">
+            <div class="trial-modal__icon">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="48" height="48">
+                    <circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>
+                </svg>
+            </div>
+            <h2 class="trial-modal__title" id="trial-modal-title">Tu prueba gratuita ha expirado</h2>
+            <p class="trial-modal__text" id="trial-modal-text">
+                Suscríbete a un plan para seguir usando Botly y mantener tu bot activo.
+            </p>
+            <button class="btn btn--primary btn--lg" id="trial-modal-btn" onclick="document.getElementById('trial-modal').style.display='none'; document.querySelector('[data-section=plans]').click();">
+                Ver planes y suscribirse
+            </button>
+        </div>
+    </div>
+
+    <!-- ========== TRIAL BANNER (floating) ========== -->
+    <div class="trial-banner" id="trial-banner" style="display:none;">
+        <span id="trial-banner-text">🎁 Prueba gratuita: te quedan <strong id="trial-hours-left">24</strong> horas</span>
+        <button class="btn btn--sm btn--primary" onclick="document.querySelector('[data-section=plans]').click();">Ver planes</button>
+    </div>
+
+    <!-- ========== MOBILE BOTTOM TAB BAR ========== -->
+    <nav class="bottom-nav" id="bottom-nav">
+        <button class="bottom-nav__tab bottom-nav__tab--active" data-section="account" aria-label="Mi Cuenta">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+            <span>Cuenta</span>
+        </button>
+        <button class="bottom-nav__tab" data-section="config" aria-label="Configuración">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+            <span>Config</span>
+        </button>
+        <button class="bottom-nav__tab bottom-nav__tab--fab" data-section="connection" aria-label="Conexión">
+            <div class="bottom-nav__fab-ring">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg>
+            </div>
+            <span>Conexión</span>
+        </button>
+        <button class="bottom-nav__tab" data-section="messages" aria-label="Mensajes">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+            <span>Mensajes</span>
+        </button>
+        <button class="bottom-nav__tab" data-section="ventas" aria-label="Ventas">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
+            <span>Ventas</span>
+        </button>
+    </nav>
+</body>
+</html>

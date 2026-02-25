@@ -1,0 +1,782 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>🍔 Pedidos WhatsApp — Sr y Sra Burger</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            background: #0b0e14;
+            color: #e8ecf1;
+            min-height: 100vh;
+            -webkit-font-smoothing: antialiased;
+            -moz-osx-font-smoothing: grayscale;
+        }
+
+        /* ── Header ── */
+        .header {
+            background: linear-gradient(135deg, #d62839 0%, #e8553d 40%, #f4a236 100%);
+            padding: 20px 32px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            position: sticky;
+            top: 0;
+            z-index: 100;
+            box-shadow: 0 6px 30px rgba(0,0,0,0.5);
+        }
+        .header h1 {
+            font-size: 1.65rem;
+            font-weight: 800;
+            color: white;
+            letter-spacing: -0.3px;
+            text-shadow: 0 2px 8px rgba(0,0,0,0.2);
+        }
+        .header-right { display: flex; align-items: center; gap: 14px; }
+        .status-badge {
+            padding: 8px 16px;
+            border-radius: 24px;
+            font-size: 0.9rem;
+            font-weight: 600;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            backdrop-filter: blur(8px);
+        }
+        .status-badge.connected {
+            background: rgba(46,204,113,0.15);
+            color: #5dfc8a;
+            border: 1.5px solid rgba(46,204,113,0.4);
+        }
+        .status-badge.disconnected {
+            background: rgba(231,76,60,0.15);
+            color: #ff6b6b;
+            border: 1.5px solid rgba(231,76,60,0.4);
+        }
+        .status-dot { width: 9px; height: 9px; border-radius: 50%; }
+        .status-badge.connected .status-dot { background: #5dfc8a; animation: pulse 2s infinite; box-shadow: 0 0 8px rgba(93,252,138,0.6); }
+        .status-badge.disconnected .status-dot { background: #ff6b6b; }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; transform: scale(1); }
+            50% { opacity: 0.4; transform: scale(0.85); }
+        }
+
+        .sound-toggle {
+            background: rgba(255,255,255,0.15);
+            border: 1.5px solid rgba(255,255,255,0.3);
+            color: white;
+            padding: 8px 18px;
+            border-radius: 24px;
+            cursor: pointer;
+            font-family: 'Inter', sans-serif;
+            font-size: 0.9rem;
+            font-weight: 600;
+            transition: all 0.25s ease;
+            backdrop-filter: blur(8px);
+        }
+        .sound-toggle:hover { background: rgba(255,255,255,0.25); border-color: rgba(255,255,255,0.5); transform: translateY(-1px); }
+        .sound-toggle.muted { opacity: 0.45; }
+
+        /* ── Stats bar ── */
+        .stats-bar {
+            background: #111827;
+            padding: 16px 32px;
+            display: flex;
+            gap: 36px;
+            border-bottom: 1px solid rgba(255,255,255,0.06);
+            font-size: 1rem;
+        }
+        .stat-item {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            color: #8b95a5;
+            font-weight: 500;
+        }
+        .stat-number {
+            font-weight: 800;
+            color: #f4a261;
+            font-size: 1.35rem;
+            letter-spacing: -0.5px;
+        }
+
+        /* ── Container ── */
+        .container {
+            max-width: 1300px;
+            margin: 24px auto;
+            padding: 0 24px;
+        }
+
+        /* ── Alert overlay ── */
+        .alert-overlay {
+            position: fixed;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background: rgba(0,0,0,0.75);
+            display: none;
+            justify-content: center;
+            align-items: center;
+            z-index: 1000;
+            backdrop-filter: blur(8px);
+        }
+        .alert-overlay.show {
+            display: flex;
+            animation: fadeIn 0.3s;
+        }
+        .alert-box {
+            background: linear-gradient(145deg, #1a2744 0%, #162038 100%);
+            border: 2px solid #f4a261;
+            border-radius: 24px;
+            padding: 40px 48px;
+            text-align: center;
+            max-width: 520px;
+            width: 92%;
+            animation: bounceIn 0.5s;
+            box-shadow: 0 24px 80px rgba(244,162,97,0.25), 0 0 0 1px rgba(244,162,97,0.1);
+        }
+        .alert-box .alert-icon { font-size: 4.5rem; margin-bottom: 18px; }
+        .alert-box h2 { color: #f4a261; font-size: 1.75rem; font-weight: 800; margin-bottom: 10px; letter-spacing: -0.3px; }
+        .alert-box p { color: #a0aec0; margin-bottom: 24px; font-size: 1.1rem; line-height: 1.5; }
+        .alert-box .alert-btn {
+            background: linear-gradient(135deg, #d62839, #f4a236);
+            color: white;
+            border: none;
+            padding: 14px 36px;
+            border-radius: 14px;
+            font-size: 1.1rem;
+            cursor: pointer;
+            font-family: 'Inter', sans-serif;
+            font-weight: 700;
+            transition: all 0.25s ease;
+            box-shadow: 0 4px 20px rgba(214,40,57,0.3);
+        }
+        .alert-box .alert-btn:hover { transform: scale(1.05); box-shadow: 0 8px 30px rgba(214,40,57,0.4); }
+
+        @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+        @keyframes bounceIn {
+            0% { transform: scale(0.5); opacity: 0; }
+            70% { transform: scale(1.05); }
+            100% { transform: scale(1); opacity: 1; }
+        }
+
+        /* ── Filter tabs ── */
+        .filter-tabs {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 24px;
+            flex-wrap: wrap;
+        }
+        .filter-tab {
+            padding: 10px 22px;
+            border-radius: 12px;
+            border: 1.5px solid rgba(255,255,255,0.08);
+            background: #111827;
+            color: #8b95a5;
+            cursor: pointer;
+            font-family: 'Inter', sans-serif;
+            font-size: 0.95rem;
+            font-weight: 600;
+            transition: all 0.25s ease;
+        }
+        .filter-tab:hover { border-color: #f4a261; color: #f4a261; background: rgba(244,162,97,0.06); }
+        .filter-tab.active {
+            background: linear-gradient(135deg, #d62839, #f4a236);
+            color: white;
+            border-color: transparent;
+            box-shadow: 0 4px 16px rgba(214,40,57,0.25);
+        }
+
+        /* ── Order cards ── */
+        .orders-grid {
+            display: grid;
+            gap: 14px;
+        }
+
+        .order-card {
+            background: #111827;
+            border-radius: 16px;
+            border: 1.5px solid rgba(255,255,255,0.06);
+            overflow: hidden;
+            transition: all 0.3s ease;
+            animation: slideIn 0.35s ease-out;
+        }
+        .order-card:hover { border-color: rgba(244,162,97,0.4); box-shadow: 0 4px 24px rgba(0,0,0,0.3); transform: translateY(-2px); }
+        .order-card.new-order {
+            border-color: #f4a261;
+            border-width: 2px;
+            box-shadow: 0 0 24px rgba(244,162,97,0.12);
+        }
+        .order-card.new-order .order-header {
+            background: linear-gradient(135deg, rgba(214,40,57,0.15), rgba(244,162,97,0.15));
+        }
+
+        @keyframes slideIn {
+            from { opacity: 0; transform: translateY(12px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .order-header {
+            padding: 14px 20px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            background: rgba(255,255,255,0.02);
+            border-bottom: 1px solid rgba(255,255,255,0.05);
+        }
+        .order-header-left { display: flex; align-items: center; gap: 12px; }
+        .order-number {
+            background: linear-gradient(135deg, #f4a261, #e8853d);
+            color: #1a1a2e;
+            font-weight: 900;
+            padding: 4px 14px;
+            border-radius: 8px;
+            font-size: 0.95rem;
+            letter-spacing: -0.3px;
+            box-shadow: 0 2px 8px rgba(244,162,97,0.3);
+        }
+        .order-customer {
+            font-weight: 700;
+            font-size: 1.1rem;
+            color: #f0f4f8;
+            letter-spacing: -0.2px;
+        }
+        .order-time {
+            color: #6b7589;
+            font-size: 0.95rem;
+            font-weight: 500;
+        }
+
+        .order-body { padding: 14px 20px; }
+        .order-detail {
+            background: #0d1117;
+            border: 1px solid rgba(255,255,255,0.06);
+            border-radius: 12px;
+            padding: 16px 18px;
+            white-space: pre-wrap;
+            font-size: 1.05rem;
+            line-height: 1.7;
+            max-height: 300px;
+            overflow-y: auto;
+            color: #d1d9e3;
+            font-weight: 450;
+        }
+        .order-detail strong {
+            color: #f4a261;
+            font-weight: 700;
+        }
+        .order-detail::-webkit-scrollbar { width: 6px; }
+        .order-detail::-webkit-scrollbar-track { background: transparent; }
+        .order-detail::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.1); border-radius: 4px; }
+        .order-detail::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.2); }
+
+        .order-footer {
+            padding: 12px 20px 16px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            flex-wrap: wrap;
+        }
+        .meta-tag {
+            display: inline-flex;
+            align-items: center;
+            gap: 5px;
+            background: rgba(255,255,255,0.04);
+            padding: 6px 14px;
+            border-radius: 8px;
+            font-size: 0.9rem;
+            font-weight: 600;
+            color: #8b95a5;
+            border: 1px solid rgba(255,255,255,0.06);
+        }
+        .footer-spacer { flex: 1; }
+
+        .status-btn {
+            padding: 9px 20px;
+            border-radius: 10px;
+            border: none;
+            cursor: pointer;
+            font-family: 'Inter', sans-serif;
+            font-size: 0.9rem;
+            font-weight: 700;
+            transition: all 0.25s ease;
+            letter-spacing: -0.2px;
+        }
+        .status-btn:hover { transform: translateY(-2px); box-shadow: 0 4px 16px rgba(0,0,0,0.3); }
+        .status-btn.preparing { background: linear-gradient(135deg, #f39c12, #e67e22); color: #1a1a2e; }
+        .status-btn.ready { background: linear-gradient(135deg, #2ecc71, #27ae60); color: #1a1a2e; }
+        .status-btn.delivered { background: linear-gradient(135deg, #3498db, #2980b9); color: white; }
+        .status-btn.cancelled { background: linear-gradient(135deg, #e74c3c, #c0392b); color: white; }
+
+        .order-status-badge {
+            padding: 5px 14px;
+            border-radius: 8px;
+            font-size: 0.82rem;
+            font-weight: 800;
+            text-transform: uppercase;
+            letter-spacing: 0.3px;
+        }
+        .status-nuevo { background: rgba(244,162,97,0.15); color: #f4a261; border: 1px solid rgba(244,162,97,0.2); }
+        .status-preparando { background: rgba(243,156,18,0.15); color: #f5b731; border: 1px solid rgba(243,156,18,0.2); }
+        .status-listo { background: rgba(46,204,113,0.15); color: #5dfc8a; border: 1px solid rgba(46,204,113,0.2); }
+        .status-entregado { background: rgba(52,152,219,0.15); color: #6db8f2; border: 1px solid rgba(52,152,219,0.2); }
+        .status-cancelado { background: rgba(231,76,60,0.15); color: #ff6b6b; border: 1px solid rgba(231,76,60,0.2); }
+
+        /* ── Empty state ── */
+        .empty-state {
+            text-align: center;
+            padding: 80px 24px;
+            color: #505a6b;
+        }
+        .empty-state .icon { font-size: 4rem; margin-bottom: 16px; opacity: 0.4; }
+        .empty-state h3 { color: #6b7589; margin-bottom: 8px; font-size: 1.25rem; font-weight: 700; }
+        .empty-state p { font-size: 1rem; color: #505a6b; }
+
+        /* ── Conversation toggle ── */
+        .convo-toggle {
+            background: rgba(255,255,255,0.04);
+            border: 1.5px solid rgba(255,255,255,0.08);
+            color: #6b7589;
+            padding: 6px 14px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-family: 'Inter', sans-serif;
+            font-size: 0.85rem;
+            font-weight: 600;
+            transition: all 0.25s ease;
+        }
+        .convo-toggle:hover { border-color: #f4a261; color: #f4a261; background: rgba(244,162,97,0.06); }
+
+        .conversation-detail {
+            display: none;
+            margin-top: 10px;
+        }
+        .conversation-detail.show { display: block; }
+        .convo-msg {
+            padding: 8px 14px;
+            margin-bottom: 4px;
+            border-radius: 8px;
+            font-size: 0.92rem;
+            line-height: 1.5;
+        }
+        .convo-msg.cliente { background: rgba(214,40,57,0.08); border-left: 3px solid #e63946; }
+        .convo-msg.bot { background: rgba(46,204,113,0.06); border-left: 3px solid #2ecc71; }
+        .convo-role { font-weight: 700; font-size: 0.8rem; color: #6b7589; text-transform: uppercase; letter-spacing: 0.3px; }
+
+        /* ── Responsive ── */
+        @media (max-width: 768px) {
+            .header { padding: 16px 18px; flex-direction: column; gap: 12px; }
+            .header h1 { font-size: 1.3rem; }
+            .stats-bar { padding: 14px 18px; gap: 16px; flex-wrap: wrap; font-size: 0.9rem; }
+            .container { padding: 0 14px; margin: 16px auto; }
+            .filter-tabs { gap: 6px; }
+            .filter-tab { padding: 8px 16px; font-size: 0.85rem; }
+            .order-header { padding: 12px 16px; flex-direction: column; gap: 8px; align-items: flex-start; }
+            .order-body { padding: 12px 16px; }
+            .order-detail { font-size: 0.95rem; }
+            .order-footer { padding: 10px 16px 14px; }
+        }
+    </style>
+</head>
+<body>
+    <!-- Alert overlay -->
+    <div class="alert-overlay" id="alertOverlay">
+        <div class="alert-box">
+            <div class="alert-icon">🍔📱</div>
+            <h2>¡Nuevo pedido por WhatsApp!</h2>
+            <p id="alertText">Ha llegado un nuevo pedido confirmado</p>
+            <button class="alert-btn" onclick="dismissAlert()">Ver pedido ✅</button>
+        </div>
+    </div>
+
+    <!-- Header -->
+    <div class="header">
+        <h1>🍔 Pedidos WhatsApp — Sr y Sra Burger</h1>
+        <div class="header-right">
+            <button class="sound-toggle" id="soundToggle" onclick="toggleSound()">🔔 Sonido ON</button>
+            <div class="status-badge connected" id="statusBadge">
+                <div class="status-dot"></div>
+                <span id="statusText">Conectado</span>
+            </div>
+        </div>
+    </div>
+
+    <!-- Stats bar -->
+    <div class="stats-bar">
+        <div class="stat-item">
+            <span>📋 Total:</span>
+            <span class="stat-number" id="totalOrders">0</span>
+        </div>
+        <div class="stat-item">
+            <span>🔴 Nuevos:</span>
+            <span class="stat-number" id="newOrders">0</span>
+        </div>
+        <div class="stat-item">
+            <span>🟠 Preparando:</span>
+            <span class="stat-number" id="preparingOrders">0</span>
+        </div>
+        <div class="stat-item">
+            <span>🟢 Listos:</span>
+            <span class="stat-number" id="readyOrders">0</span>
+        </div>
+    </div>
+
+    <!-- Container -->
+    <div class="container">
+        <!-- Filter tabs -->
+        <div class="filter-tabs">
+            <button class="filter-tab active" data-filter="todos" onclick="setFilter('todos', this)">📋 Todos</button>
+            <button class="filter-tab" data-filter="nuevo" onclick="setFilter('nuevo', this)">🆕 Nuevos</button>
+            <button class="filter-tab" data-filter="preparando" onclick="setFilter('preparando', this)">👨‍🍳 Preparando</button>
+            <button class="filter-tab" data-filter="listo" onclick="setFilter('listo', this)">✅ Listos</button>
+            <button class="filter-tab" data-filter="entregado" onclick="setFilter('entregado', this)">🛵 Entregados</button>
+        </div>
+
+        <!-- Orders grid -->
+        <div class="orders-grid" id="ordersGrid">
+            <div class="empty-state" id="emptyState">
+                <div class="icon">📱</div>
+                <h3>Esperando pedidos por WhatsApp...</h3>
+                <p>Los pedidos confirmados por el bot aparecerán aquí automáticamente</p>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // ── State ──
+        let allOrders = [];
+        let lastSeenId = 0;
+        let soundEnabled = true;
+        let currentFilter = 'todos';
+        let audioContext = null;
+        let isPolling = true;
+
+        // ── Audio ──
+        function initAudio() {
+            if (!audioContext) {
+                audioContext = new (window.AudioContext || window.webkitAudioContext)();
+            }
+        }
+
+        function playNotificationSound() {
+            if (!soundEnabled) return;
+            try {
+                initAudio();
+                const ctx = audioContext;
+
+                // Melodía de notificación tipo restaurante (3 tonos ascendentes)
+                const notes = [
+                    { freq: 523.25, start: 0, dur: 0.15 },     // C5
+                    { freq: 659.25, start: 0.18, dur: 0.15 },   // E5
+                    { freq: 783.99, start: 0.36, dur: 0.3 },    // G5
+                ];
+
+                notes.forEach(note => {
+                    const osc = ctx.createOscillator();
+                    const gain = ctx.createGain();
+                    osc.connect(gain);
+                    gain.connect(ctx.destination);
+                    osc.type = 'sine';
+                    osc.frequency.value = note.freq;
+                    gain.gain.setValueAtTime(0.4, ctx.currentTime + note.start);
+                    gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + note.start + note.dur);
+                    osc.start(ctx.currentTime + note.start);
+                    osc.stop(ctx.currentTime + note.start + note.dur + 0.05);
+                });
+
+                // Segundo toque después de 1 segundo
+                setTimeout(() => {
+                    notes.forEach(note => {
+                        const osc = ctx.createOscillator();
+                        const gain = ctx.createGain();
+                        osc.connect(gain);
+                        gain.connect(ctx.destination);
+                        osc.type = 'sine';
+                        osc.frequency.value = note.freq;
+                        gain.gain.setValueAtTime(0.3, ctx.currentTime + note.start);
+                        gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + note.start + note.dur);
+                        osc.start(ctx.currentTime + note.start);
+                        osc.stop(ctx.currentTime + note.start + note.dur + 0.05);
+                    });
+                }, 1200);
+
+            } catch (e) {
+                console.error('Error playing sound:', e);
+            }
+        }
+
+        function toggleSound() {
+            soundEnabled = !soundEnabled;
+            const btn = document.getElementById('soundToggle');
+            btn.textContent = soundEnabled ? '🔔 Sonido ON' : '🔇 Sonido OFF';
+            btn.classList.toggle('muted', !soundEnabled);
+            // Initialize audio context on user interaction
+            if (soundEnabled) initAudio();
+        }
+
+        // ── Alert ──
+        function showAlert(order) {
+            document.getElementById('alertText').textContent =
+                `Pedido #${order.id} de ${order.sender_name}`;
+            document.getElementById('alertOverlay').classList.add('show');
+            playNotificationSound();
+
+            // También cambiar el título de la pestaña
+            document.title = `🔴 ¡NUEVO PEDIDO! — Sr y Sra Burger`;
+
+            // Parpadear título
+            let blinkInterval = setInterval(() => {
+                document.title = document.title.includes('🔴')
+                    ? '🍔 Pedidos WhatsApp — Sr y Sra Burger'
+                    : `🔴 ¡NUEVO PEDIDO #${order.id}!`;
+            }, 1000);
+
+            window._blinkInterval = blinkInterval;
+        }
+
+        function dismissAlert() {
+            document.getElementById('alertOverlay').classList.remove('show');
+            document.title = '🍔 Pedidos WhatsApp — Sr y Sra Burger';
+            if (window._blinkInterval) clearInterval(window._blinkInterval);
+        }
+
+        // ── Filters ──
+        function setFilter(filter, btn) {
+            currentFilter = filter;
+            document.querySelectorAll('.filter-tab').forEach(t => t.classList.remove('active'));
+            btn.classList.add('active');
+            renderOrders();
+        }
+
+        // ── Format bot text for HTML ──
+        function formatBotText(text) {
+            return text
+                .replace(/\*(.*?)\*/g, '<strong>$1</strong>')
+                .replace(/\n/g, '<br>');
+        }
+
+        // ── Extract just the order items and total from bot text ──
+        function extractOrderItems(text) {
+            if (!text) return 'Sin detalle';
+            const lines = text.split('\n');
+            const keepLines = [];
+            let inOrder = false;
+
+            for (const line of lines) {
+                const trimmed = line.trim();
+                // Start capturing at bullet items, "Tu pedido", totals, or separator lines
+                if (trimmed.startsWith('•') || trimmed.startsWith('*Tu pedido') || trimmed.startsWith('Tu pedido') ||
+                    trimmed.toLowerCase().startsWith('subtotal') || trimmed.toLowerCase().startsWith('*subtotal') ||
+                    trimmed.toLowerCase().startsWith('envío') || trimmed.toLowerCase().startsWith('*envío') ||
+                    trimmed.toLowerCase().startsWith('envio') || trimmed.toLowerCase().startsWith('*envio') ||
+                    trimmed.toLowerCase().startsWith('total') || trimmed.toLowerCase().startsWith('*total') ||
+                    trimmed.includes('──') || trimmed.includes('$')) {
+                    inOrder = true;
+                }
+                // Stop at payment question or farewell
+                if (trimmed.includes('¿Cómo vas a pagar') || trimmed.includes('como vas a pagar') || 
+                    trimmed.includes('confirmado') || trimmed.includes('minutitos')) {
+                    break;
+                }
+                if (inOrder) {
+                    keepLines.push(line);
+                }
+            }
+
+            // If we got items, return them; otherwise return original but trimmed
+            if (keepLines.length > 0) {
+                return keepLines.join('\n').trim();
+            }
+            // Fallback: return first ~300 chars
+            return text.length > 300 ? text.substring(0, 300) + '...' : text;
+        }
+
+        // ── Render orders ──
+        function renderOrders() {
+            const grid = document.getElementById('ordersGrid');
+            const empty = document.getElementById('emptyState');
+
+            let filtered = allOrders;
+            if (currentFilter !== 'todos') {
+                filtered = allOrders.filter(o => o.status === currentFilter);
+            }
+
+            // Sort: newest first
+            filtered = [...filtered].sort((a, b) => b.id - a.id);
+
+            if (filtered.length === 0) {
+                grid.innerHTML = '';
+                grid.appendChild(empty);
+                empty.style.display = 'block';
+                return;
+            }
+
+            empty.style.display = 'none';
+
+            grid.innerHTML = filtered.map(order => {
+                // Extract just the items/total part from order_details
+                const detail = order.order_details || order.bot_confirmation || '';
+                const cleanDetail = extractOrderItems(detail);
+                const addr = order.delivery_address ? order.delivery_address : '';
+
+                return `
+                <div class="order-card ${order.status === 'nuevo' ? 'new-order' : ''}" id="order-${order.id}">
+                    <div class="order-header">
+                        <div class="order-header-left">
+                            <span class="order-number">#${order.id}</span>
+                            <span class="order-customer">📱 ${escapeHtml(order.sender_name)}</span>
+                            <span class="order-status-badge status-${order.status}">${getStatusLabel(order.status)}</span>
+                        </div>
+                        <span class="order-time">🕐 ${escapeHtml(order.time_short || order.timestamp)}</span>
+                    </div>
+                    <div class="order-body">
+                        <div class="order-detail">${formatBotText(escapeHtml(cleanDetail))}${addr ? '<br>──────────────────<br>📍 <strong>' + escapeHtml(addr) + '</strong>' : ''}</div>
+                        <div style="margin-top:8px;">
+                            <button class="convo-toggle" onclick="toggleConvo(${order.id})">💬 Conversación</button>
+                            <div class="conversation-detail" id="convo-${order.id}">
+                                ${(order.conversation || []).map(line => {
+                                    const isClient = line.startsWith('Cliente:');
+                                    const role = isClient ? 'Cliente' : 'Bot';
+                                    const text = line.substring(line.indexOf(':') + 1).trim();
+                                    return `<div class="convo-msg ${isClient ? 'cliente' : 'bot'}"><span class="convo-role">${role}:</span> ${formatBotText(escapeHtml(text))}</div>`;
+                                }).join('')}
+                            </div>
+                        </div>
+                    </div>
+                    <div class="order-footer">
+                        <span class="meta-tag">${escapeHtml(order.delivery_type || '?')}</span>
+                        <span class="meta-tag">${escapeHtml(order.payment || '?')}</span>
+                        <span class="footer-spacer"></span>
+                        ${order.status === 'nuevo' ? `
+                            <button class="status-btn preparing" onclick="updateStatus(${order.id}, 'preparando')">👨‍🍳 Preparando</button>
+                            <button class="status-btn cancelled" onclick="updateStatus(${order.id}, 'cancelado')">❌ Cancelar</button>
+                        ` : ''}
+                        ${order.status === 'preparando' ? `
+                            <button class="status-btn ready" onclick="updateStatus(${order.id}, 'listo')">✅ Listo</button>
+                        ` : ''}
+                        ${order.status === 'listo' ? `
+                            <button class="status-btn delivered" onclick="updateStatus(${order.id}, 'entregado')">🛵 Entregado</button>
+                        ` : ''}
+                    </div>
+                </div>
+            `}).join('');
+
+            // Update stats
+            updateStats();
+        }
+
+        function getStatusLabel(status) {
+            const labels = {
+                'nuevo': '🆕 NUEVO',
+                'preparando': '👨‍🍳 PREPARANDO',
+                'listo': '✅ LISTO',
+                'entregado': '🛵 ENTREGADO',
+                'cancelado': '❌ CANCELADO'
+            };
+            return labels[status] || status;
+        }
+
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text || '';
+            return div.innerHTML;
+        }
+
+        function toggleConvo(orderId) {
+            const el = document.getElementById(`convo-${orderId}`);
+            el.classList.toggle('show');
+        }
+
+        function updateStats() {
+            document.getElementById('totalOrders').textContent = allOrders.length;
+            document.getElementById('newOrders').textContent = allOrders.filter(o => o.status === 'nuevo').length;
+            document.getElementById('preparingOrders').textContent = allOrders.filter(o => o.status === 'preparando').length;
+            document.getElementById('readyOrders').textContent = allOrders.filter(o => o.status === 'listo').length;
+        }
+
+        // ── API calls ──
+        async function fetchAllOrders() {
+            try {
+                const res = await fetch('/api/orders');
+                const data = await res.json();
+                allOrders = data.orders || [];
+                if (allOrders.length > 0) {
+                    lastSeenId = Math.max(...allOrders.map(o => o.id));
+                }
+                renderOrders();
+                setConnected(true);
+            } catch (e) {
+                console.error('Error fetching orders:', e);
+                setConnected(false);
+            }
+        }
+
+        async function pollNewOrders() {
+            if (!isPolling) return;
+            try {
+                const res = await fetch(`/api/orders/new?since=${lastSeenId}`);
+                const data = await res.json();
+                setConnected(true);
+
+                if (data.orders && data.orders.length > 0) {
+                    data.orders.forEach(order => {
+                        // Check if we already have this order
+                        const existing = allOrders.find(o => o.id === order.id);
+                        if (!existing) {
+                            allOrders.push(order);
+                            showAlert(order);
+                        }
+                    });
+                    lastSeenId = Math.max(...data.orders.map(o => o.id));
+                    renderOrders();
+                }
+            } catch (e) {
+                console.error('Error polling orders:', e);
+                setConnected(false);
+            }
+        }
+
+        async function updateStatus(orderId, newStatus) {
+            try {
+                const res = await fetch(`/api/orders/${orderId}/status`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ status: newStatus })
+                });
+                if (res.ok) {
+                    const order = allOrders.find(o => o.id === orderId);
+                    if (order) order.status = newStatus;
+                    renderOrders();
+                }
+            } catch (e) {
+                console.error('Error updating status:', e);
+            }
+        }
+
+        function setConnected(connected) {
+            const badge = document.getElementById('statusBadge');
+            const text = document.getElementById('statusText');
+            badge.className = `status-badge ${connected ? 'connected' : 'disconnected'}`;
+            text.textContent = connected ? 'Conectado' : 'Sin conexión';
+        }
+
+        // ── Init ──
+        // Activate audio on first user click (browser policy)
+        document.addEventListener('click', () => initAudio(), { once: true });
+
+        // Initial load
+        fetchAllOrders();
+
+        // Poll every 3 seconds
+        setInterval(pollNewOrders, 3000);
+
+        // Also refresh all orders every 30 seconds to sync status changes
+        setInterval(fetchAllOrders, 30000);
+    </script>
+</body>
+</html>
