@@ -807,6 +807,8 @@ select.form__input option:checked {
     grid-template-columns: 300px 1fr;
     gap: 1.75rem;
     align-items: start;
+    max-width: 820px;
+    margin: 0 auto;
 }
 
 .qr-container {
