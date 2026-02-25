@@ -355,7 +355,7 @@ async function detectOrderConfirmation(uid, chatId, customerMsg, botReply, confi
         `Último mensaje del cliente: "${customerMsg}"\n` +
         `Última respuesta del bot: "${botReply}"\n\n` +
         `Responde SOLO con JSON válido sin texto adicional ni marcadores de código:\n` +
-        `{"isOrder": true/false, "nombre": "nombre del cliente o null", "telefono": "ya lo tenemos, dejar null", "direccion": "dirección o 'Pasa a recoger' o null", "pedido": "productos y cantidades o null", "especificaciones": "especificaciones o 'Sin especificaciones' o null", "pago": "con cuánto paga o null"}`;
+        `{"isOrder": true/false, "nombre": "nombre del cliente o null", "telefono": "ya lo tenemos, dejar null", "direccion": "dirección o 'Pasa a recoger' o null", "pedido": "productos y cantidades o null", "especificaciones": "especificaciones o 'Sin especificaciones' o null", "total": "costo total del pedido (ej: $120) o null si no se mencionó", "pago": "con cuánto paga (ej: $200) o null", "cambio": "cambio a regresar: pago menos total (ej: $80) o null si no se puede calcular"}`;
 
     try {
         const genAI = new GoogleGenerativeAI(GEMINI_API_KEY);
