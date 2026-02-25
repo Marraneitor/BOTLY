@@ -336,11 +336,13 @@
 
         socket.on('qr', function(qrString) {
             console.log('[Socket] QR recibido');
+            stopQRPolling();
             navigateTo('connection');
             renderQR(qrString);
         });
 
         socket.on('ready', function() {
+            stopQRPolling();
             setConnectionStatus(true);
             showToast('Bot conectado exitosamente!');
         });
@@ -410,6 +412,40 @@
                 : 'Tu suscripción ha expirado. El bot dejará de responder.';
             showToast(msg, 'error');
         });
+    }
+
+    // --- QR Polling fallback (in case socket event is missed) ---
+    var _qrPollTimer = null;
+    var _qrPollCount = 0;
+    var QR_POLL_MAX = 30; // 30 × 2s = 60 seconds
+
+    function startQRPolling() {
+        stopQRPolling();
+        _qrPollCount = 0;
+        _qrPollTimer = setInterval(function() {
+            _qrPollCount++;
+            if (_qrPollCount > QR_POLL_MAX) {
+                stopQRPolling();
+                return;
+            }
+            apiCall('/bot/status').then(function(res) {
+                if (res.status === 'connected') {
+                    stopQRPolling();
+                    setConnectionStatus(true);
+                } else if (res.status === 'qr' && res.lastQR) {
+                    stopQRPolling();
+                    navigateTo('connection');
+                    renderQR(res.lastQR);
+                }
+            }).catch(function() { /* ignore */ });
+        }, 2000);
+    }
+
+    function stopQRPolling() {
+        if (_qrPollTimer) {
+            clearInterval(_qrPollTimer);
+            _qrPollTimer = null;
+        }
     }
 
     // --- QR Rendering ---
@@ -576,6 +612,8 @@
                 }
                 if (qrCanvas) qrCanvas.classList.add('qr-canvas--hidden');
                 showToast('Sesión reseteada. Esperando nuevo QR…');
+                // Polling fallback: if socket QR event never arrives, fetch via REST
+                startQRPolling();
             }).catch(function(err) {
                 showToast(err.message || 'Error al formatear', 'error');
             }).finally(function() {
@@ -1288,6 +1326,13 @@
             } else if (res.status === 'qr') {
                 initSocket();
                 navigateTo('connection');
+                // Render cached QR immediately if available, socket will update if refreshed
+                if (res.lastQR) {
+                    renderQR(res.lastQR);
+                } else {
+                    // Start polling until QR arrives
+                    startQRPolling();
+                }
             }
         }).catch(function() { /* ignore */ });
 

@@ -370,6 +370,7 @@ app.get('/api/bot/status', authMiddleware, (req, res) => {
         status: bot ? bot.status : 'off',
         paused: bot?.paused || false,
         qrPending: bot?.status === 'qr',
+        lastQR: (bot?.status === 'qr' && bot.lastQR) ? bot.lastQR : null,
         stats: bot?.stats || { messagesToday: 0, contactsCount: 0 }
     });
 });
