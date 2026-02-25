@@ -2064,17 +2064,25 @@ function bufferAndReply(uid, jid, text, phone, senderName, config, sock, room, e
                     const now = new Date().toLocaleString('es-MX', {
                         timeZone: 'America/Mexico_City', dateStyle: 'full', timeStyle: 'short'
                     });
+                    const nombre      = orderInfo.nombre      || entry.senderName;
+                    const direccion   = orderInfo.direccion   || '—';
+                    const pedido      = orderInfo.pedido      || '—';
+                    const specs       = orderInfo.especificaciones || '—';
+                    const pago        = orderInfo.pago        || '—';
                     const orderMsg =
                         `🛎️ *NUEVO PEDIDO CONFIRMADO*\n\n` +
-                        `👤 *Cliente:* ${entry.senderName}\n` +
+                        `👤 *Nombre:* ${nombre}\n` +
                         `📞 *Teléfono:* ${entry.phone}\n` +
-                        `📅 *Fecha y hora:* ${now}\n\n` +
-                        `📋 *Detalle del pedido:*\n${orderInfo.summary}`;
+                        `🏠 *Dirección:* ${direccion}\n` +
+                        `🍔 *Pedido:* ${pedido}\n` +
+                        `📝 *Especificaciones:* ${specs}\n` +
+                        `💵 *Paga con:* ${pago}\n` +
+                        `📅 *Fecha y hora:* ${now}`;
                     await entry.sock.sendMessage(ownerJid, { text: orderMsg });
                     console.log(`[Order][${entry.email}] 📦 Sending to owner JID: ${ownerJid}`);
                     io.to(entry.room).emit('order_confirmed', {
-                        phone: entry.phone, senderName: entry.senderName,
-                        summary: orderInfo.summary, timestamp: now
+                        phone: entry.phone, senderName: nombre,
+                        direccion, pedido, especificaciones: specs, pago, timestamp: now
                     });
                     console.log(`[Bot][${entry.email}] 📦 Order forwarded to owner from ${entry.phone}`);
                 }

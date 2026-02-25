@@ -342,19 +342,26 @@ async function detectOrderConfirmation(uid, chatId, customerMsg, botReply, confi
     ).join('\n');
 
     const prompt =
-        `Analiza si en esta conversación de WhatsApp el cliente hizo un PEDIDO CONFIRMADO ` +
-        `(especificó qué quiere pedir con cantidades y está listo para proceder, no es solo una pregunta de precios).\n\n` +
+        `Analiza esta conversación de WhatsApp de una tienda/restaurante.\n` +
+        `Determina si el cliente ya proporcionó TODOS los siguientes datos para completar un pedido:\n` +
+        `1. Nombre del cliente\n` +
+        `2. Dirección de entrega (o indicó que pasa a recoger)\n` +
+        `3. Producto(s) pedido(s) con cantidades\n` +
+        `4. Especificaciones del pedido (tamaño, sabor, extras, etc. — puede ser "sin especificaciones" si el producto no las tiene)\n` +
+        `5. Con cuánto va a pagar (monto o denominación del billete)\n\n` +
+        `isOrder debe ser TRUE únicamente si los 5 datos están presentes y confirmados en la conversación.\n` +
+        `Si falta cualquiera de los 5, isOrder = false.\n\n` +
         `Conversación reciente:\n${historyText}\n` +
         `Último mensaje del cliente: "${customerMsg}"\n` +
         `Última respuesta del bot: "${botReply}"\n\n` +
-        `Responde SOLO con JSON válido sin texto adicional:\n` +
-        `{"isOrder": true/false, "summary": "resumen del pedido si existe, incluyendo productos y cantidades"}`;
+        `Responde SOLO con JSON válido sin texto adicional ni marcadores de código:\n` +
+        `{"isOrder": true/false, "nombre": "nombre del cliente o null", "telefono": "ya lo tenemos, dejar null", "direccion": "dirección o 'Pasa a recoger' o null", "pedido": "productos y cantidades o null", "especificaciones": "especificaciones o 'Sin especificaciones' o null", "pago": "con cuánto paga o null"}`;
 
     try {
         const genAI = new GoogleGenerativeAI(GEMINI_API_KEY);
         const model = genAI.getGenerativeModel({
             model: 'gemini-2.0-flash',
-            generationConfig: { temperature: 0.1, maxOutputTokens: 300 }
+            generationConfig: { temperature: 0.1, maxOutputTokens: 500 }
         });
         const result = await model.generateContent(prompt);
         const text = result.response.text().trim();
