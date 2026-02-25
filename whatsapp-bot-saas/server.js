@@ -2068,7 +2068,9 @@ function bufferAndReply(uid, jid, text, phone, senderName, config, sock, room, e
                     const direccion   = orderInfo.direccion   || '—';
                     const pedido      = orderInfo.pedido      || '—';
                     const specs       = orderInfo.especificaciones || '—';
+                    const total       = orderInfo.total       || '—';
                     const pago        = orderInfo.pago        || '—';
+                    const cambio      = orderInfo.cambio      || '—';
                     const orderMsg =
                         `🛎️ *NUEVO PEDIDO CONFIRMADO*\n\n` +
                         `👤 *Nombre:* ${nombre}\n` +
@@ -2076,13 +2078,15 @@ function bufferAndReply(uid, jid, text, phone, senderName, config, sock, room, e
                         `🏠 *Dirección:* ${direccion}\n` +
                         `🍔 *Pedido:* ${pedido}\n` +
                         `📝 *Especificaciones:* ${specs}\n` +
+                        `💰 *Total:* ${total}\n` +
                         `💵 *Paga con:* ${pago}\n` +
+                        `💴 *Cambio:* ${cambio}\n` +
                         `📅 *Fecha y hora:* ${now}`;
                     await entry.sock.sendMessage(ownerJid, { text: orderMsg });
                     console.log(`[Order][${entry.email}] 📦 Sending to owner JID: ${ownerJid}`);
                     io.to(entry.room).emit('order_confirmed', {
                         phone: entry.phone, senderName: nombre,
-                        direccion, pedido, especificaciones: specs, pago, timestamp: now
+                        direccion, pedido, especificaciones: specs, total, pago, cambio, timestamp: now
                     });
                     console.log(`[Bot][${entry.email}] 📦 Order forwarded to owner from ${entry.phone}`);
                 }
