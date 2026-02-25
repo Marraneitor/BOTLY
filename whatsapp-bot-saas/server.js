@@ -20,6 +20,8 @@ process.on('unhandledRejection', (reason) => {
 
 const express = require('express');
 const http = require('http');
+const https = require('https');
+const WebSocket = require('ws');
 const { Server: SocketServer } = require('socket.io');
 const path = require('path');
 const fs = require('fs');
@@ -1775,7 +1777,8 @@ async function startBot(uid, email, _retryCount = 0) {
         connectTimeoutMs: 60000,
         qrTimeout: 60000,
         defaultQueryTimeoutMs: 0,
-        retryRequestDelayMs: 2000
+        retryRequestDelayMs: 2000,
+        options: { fetchAgent: new https.Agent({ family: 4, timeout: 60000 }) }
     });
 
     botState.sock = sock;
@@ -1824,10 +1827,12 @@ async function startBot(uid, email, _retryCount = 0) {
 
         if (connection === 'close') {
             const statusCode = lastDisconnect?.error?.output?.statusCode;
-            const errorMsg = lastDisconnect?.error?.message || lastDisconnect?.error?.toString() || 'unknown';
+            const rawErr = lastDisconnect?.error;
+            const errorMsg = rawErr?.message || rawErr?.toString() || 'none';
+            const errCode = rawErr?.code || rawErr?.output?.statusCode || 'n/a';
             const shouldReconnect = statusCode !== DisconnectReason.loggedOut;
 
-            console.log(`[Bot] Connection closed for ${email}: code=${statusCode}, error=${errorMsg}, reconnect=${shouldReconnect}`);
+            console.log(`[Bot] Connection closed for ${email}: wsCode=${statusCode} errCode=${errCode} msg=${errorMsg} reconnect=${shouldReconnect}`);
 
             if (shouldReconnect && botState.retryCount < 5) {
                 botState.retryCount++;
@@ -2118,6 +2123,38 @@ server.listen(PORT, () => {
     console.log('━'.repeat(50));
     console.log('Cada usuario obtiene su propio bot al registrarse\n');
 
+    // Test WhatsApp WS connectivity (diagnostic — logs exact error if blocked)
+    testWhatsAppConnectivity();
+
     // Auto-restart bots that were active before server shutdown
     setTimeout(() => autoStartBots(), 3000);
 });
+
+function testWhatsAppConnectivity() {
+    console.log('[Connectivity] Testing connection to WhatsApp servers...');
+    const ws = new WebSocket('wss://web.whatsapp.com/ws/chat', ['chat'], {
+        headers: {
+            'Host': 'web.whatsapp.com',
+            'Origin': 'https://web.whatsapp.com',
+            'User-Agent': 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+        },
+        agent: new https.Agent({ family: 4 })
+    });
+    const timer = setTimeout(() => {
+        console.error('[Connectivity] TIMEOUT — WhatsApp WS did not respond in 15s');
+        ws.terminate();
+    }, 15000);
+    ws.on('open', () => {
+        clearTimeout(timer);
+        console.log('[Connectivity] SUCCESS — Can reach WhatsApp WS');
+        ws.close();
+    });
+    ws.on('error', (err) => {
+        clearTimeout(timer);
+        console.error(`[Connectivity] FAILED — code=${err.code} msg=${err.message}`);
+    });
+    ws.on('close', (code, reason) => {
+        clearTimeout(timer);
+        console.log(`[Connectivity] Closed — wsCode=${code} reason=${reason.toString().slice(0,100)}`);
+    });
+}
