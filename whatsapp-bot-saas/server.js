@@ -2034,7 +2034,11 @@ function bufferAndReply(uid, jid, text, phone, senderName, config, sock, room, e
     entry.timer = setTimeout(async () => {
         pendingMsgBuffers.delete(key);
         const combined = entry.texts.join('\n');
-        const ownerJid = entry.sock?.user?.id;
+        // Baileys sock.user.id = "521234567890:12@s.whatsapp.net" — strip device suffix
+        const rawOwnerId = entry.sock?.user?.id || '';
+        const ownerJid = rawOwnerId.includes(':')
+            ? rawOwnerId.split(':')[0] + '@s.whatsapp.net'
+            : rawOwnerId;
         try {
             const reply = await getAIResponse(uid, jid, combined, entry.senderName, entry.config);
             await entry.sock.sendMessage(jid, { text: reply });
@@ -2055,6 +2059,7 @@ function bufferAndReply(uid, jid, text, phone, senderName, config, sock, room, e
             // ── Real-time order detection ──
             try {
                 const orderInfo = await detectOrderConfirmation(uid, jid, combined, reply, entry.config);
+                console.log(`[Order][${entry.email}] detect result for ${entry.phone}:`, JSON.stringify(orderInfo));
                 if (orderInfo?.isOrder && ownerJid) {
                     const now = new Date().toLocaleString('es-MX', {
                         timeZone: 'America/Mexico_City', dateStyle: 'full', timeStyle: 'short'
@@ -2066,6 +2071,7 @@ function bufferAndReply(uid, jid, text, phone, senderName, config, sock, room, e
                         `📅 *Fecha y hora:* ${now}\n\n` +
                         `📋 *Detalle del pedido:*\n${orderInfo.summary}`;
                     await entry.sock.sendMessage(ownerJid, { text: orderMsg });
+                    console.log(`[Order][${entry.email}] 📦 Sending to owner JID: ${ownerJid}`);
                     io.to(entry.room).emit('order_confirmed', {
                         phone: entry.phone, senderName: entry.senderName,
                         summary: orderInfo.summary, timestamp: now
