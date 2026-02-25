@@ -10,6 +10,14 @@
 
 require('dotenv').config();
 
+// ─── Global error guards — prevent process crash from Baileys WS errors ──────
+process.on('uncaughtException', (err) => {
+    console.error('[Process] Uncaught exception (survived):', err.message);
+});
+process.on('unhandledRejection', (reason) => {
+    console.error('[Process] Unhandled rejection (survived):', reason);
+});
+
 const express = require('express');
 const http = require('http');
 const { Server: SocketServer } = require('socket.io');
@@ -178,6 +186,10 @@ app.use(express.static(path.join(__dirname, 'src', 'public'), {
     setHeaders(res, filePath) {
         // HTML files: no cache (always fresh)
         if (filePath.endsWith('.html')) {
+            res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+        }
+        // Service worker: never cache via HTTP (browser must always recheck)
+        else if (filePath.endsWith('sw.js')) {
             res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
         }
         // CSS/JS: cache 1 day with revalidation
@@ -1706,7 +1718,7 @@ function dedup(id) {
 // Baileys logger (silent by default, set BAILEYS_DEBUG=true for verbose)
 const baileysLogger = pino({ level: process.env.BAILEYS_DEBUG ? 'debug' : 'silent' });
 
-async function startBot(uid, email) {
+async function startBot(uid, email, _retryCount = 0) {
     const room = `user_${uid}`;
     console.log(`\n[Bot] Starting for ${email} (${uid})`);
 
@@ -1728,7 +1740,7 @@ async function startBot(uid, email) {
         status: 'starting',
         lastQR: null,
         stats: { messagesToday: 0, contactsCount: 0 },
-        retryCount: 0,
+        retryCount: _retryCount,  // carry over so retries actually stop after 5
         paused: wasPaused
     };
     userBots.set(uid, botState);
@@ -1809,7 +1821,7 @@ async function startBot(uid, email) {
             if (shouldReconnect && botState.retryCount < 5) {
                 botState.retryCount++;
                 console.log(`[Bot] Reconnecting for ${email} (attempt ${botState.retryCount})…`);
-                setTimeout(() => startBot(uid, email), 3000);
+                setTimeout(() => startBot(uid, email, botState.retryCount), 3000);
             } else {
                 // Logged out or too many retries — clean up
                 botState.status = 'off';
