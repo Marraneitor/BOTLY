@@ -440,25 +440,47 @@ app.post('/api/bot/request-pairing-code', authMiddleware, async (req, res) => {
     const cleanPhone = phone.replace(/\D/g, '');
     if (cleanPhone.length < 7) return res.status(400).json({ error: 'Número de teléfono inválido.' });
 
-    const bot = userBots.get(req.uid);
-    if (!bot || !bot.sock) {
-        return res.status(400).json({ error: 'Inicia el bot primero y espera a que aparezca el QR.' });
-    }
-    if (bot.status === 'connected') {
+    const uid = req.uid;
+    const bot = userBots.get(uid);
+
+    // If bot is already fully connected, nothing to do
+    if (bot && bot.status === 'connected') {
         return res.status(400).json({ error: 'El bot ya está conectado.' });
     }
 
-    try {
-        const code = await bot.sock.requestPairingCode(cleanPhone);
-        console.log(`[Bot][${req.email}] 📱 Pairing code requested: ${code}`);
-        // Emit back via socket too so any open tab gets it
-        const room = `user_${req.uid}`;
-        io.to(room).emit('pairing_code', code);
-        res.json({ ok: true, code });
-    } catch (e) {
-        console.error(`[Bot][${req.email}] Pairing code error:`, e.message);
-        res.status(500).json({ error: e.message || 'Error al solicitar código de vinculación.' });
+    // If bot has a live socket (in QR/starting state), call requestPairingCode directly
+    if (bot && bot.sock) {
+        try {
+            const code = await bot.sock.requestPairingCode(cleanPhone);
+            console.log(`[Bot][${req.email}] 📱 Pairing code requested: ${code}`);
+            const room = `user_${uid}`;
+            io.to(room).emit('pairing_code', code);
+            return res.json({ ok: true, code });
+        } catch (e) {
+            console.error(`[Bot][${req.email}] Pairing code error:`, e.message);
+            return res.status(500).json({ error: e.message || 'Error al solicitar código de vinculación.' });
+        }
     }
+
+    // Bot not started — check subscription then start in pairing mode
+    const isAdmin = FREE_PASS_EMAILS.includes(req.email);
+    if (!isAdmin) {
+        const config = await loadUserConfig(uid);
+        const sub = config.subscription;
+        if (!sub || !sub.expiresAt || new Date(sub.expiresAt) <= new Date()) {
+            const reason = sub?.isTrial ? 'trial_expired' : (!sub ? 'no_subscription' : 'expired');
+            return res.status(403).json({
+                error: reason === 'trial_expired'
+                    ? 'Tu prueba gratuita ha expirado. Suscríbete para seguir usando Botly.'
+                    : 'Se requiere una suscripción activa para iniciar el bot.',
+                reason
+            });
+        }
+    }
+
+    await saveUserConfig(uid, { botActive: true, botEmail: req.email });
+    startBot(uid, req.email, 0, cleanPhone);
+    return res.json({ ok: true, pending: true, message: 'Bot iniciando, el código llegará en segundos vía socket.' });
 });
 
 // Pause bot globally — keeps WhatsApp connection alive, stops responding to messages
@@ -1784,9 +1806,9 @@ function dedup(id) {
 // Baileys logger (silent by default, set BAILEYS_DEBUG=true for verbose)
 const baileysLogger = pino({ level: process.env.BAILEYS_DEBUG ? 'debug' : 'silent' });
 
-async function startBot(uid, email, _retryCount = 0) {
+async function startBot(uid, email, _retryCount = 0, pairingPhone = null) {
     const room = `user_${uid}`;
-    console.log(`\n[Bot] Starting for ${email} (${uid})`);
+    console.log(`\n[Bot] Starting for ${email} (${uid})${pairingPhone ? ' [pairing mode]' : ''}`);
 
     // If there's already a running bot, clean it up first
     const existing = userBots.get(uid);
@@ -1846,6 +1868,21 @@ async function startBot(uid, email, _retryCount = 0) {
     });
 
     botState.sock = sock;
+
+    // If started in pairing-code mode, request the code once socket is ready
+    if (pairingPhone) {
+        setTimeout(async () => {
+            try {
+                const cleanPhone = String(pairingPhone).replace(/\D/g, '');
+                const code = await sock.requestPairingCode(cleanPhone);
+                console.log(`[Bot][${email}] 📱 Pairing code: ${code}`);
+                io.to(room).emit('pairing_code', code);
+            } catch (e) {
+                console.error(`[Bot][${email}] Pairing code error:`, e.message);
+                io.to(room).emit('pairing_code_error', e.message);
+            }
+        }, 1500);
+    }
 
     // Swallow raw WS errors so they don't crash the process
     try { if (sock.ws && typeof sock.ws.on === 'function') sock.ws.on('error', function(err){ console.error('[Bot] WS error for ' + email + ':', err.message); }); } catch {}

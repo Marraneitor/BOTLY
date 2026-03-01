@@ -427,6 +427,10 @@
             showToast('Código de vinculación listo: ' + code, 'success');
         });
 
+        socket.on('pairing_code_error', function(msg) {
+            showToast(msg || 'Error al generar el código de vinculación', 'error');
+        });
+
         // Global pause state from server
         socket.on('bot_paused', function(paused) {
             setBotPausedState(paused);
@@ -747,8 +751,12 @@
                 if (data.code && pairingCodeDisplay && pairingCodeBox) {
                     pairingCodeDisplay.textContent = data.code;
                     pairingCodeBox.style.display = 'block';
+                    showToast('Código generado correctamente', 'success');
+                } else if (data.pending) {
+                    showToast('Bot iniciando… el código llegará en segundos', 'info');
+                } else {
+                    showToast('Código generado correctamente', 'success');
                 }
-                showToast('Código generado correctamente', 'success');
             }).catch(function(err) {
                 showToast(err.message || 'Error al solicitar código. ¿El bot está iniciado?', 'error');
             }).finally(function() {
