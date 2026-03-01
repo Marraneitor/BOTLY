@@ -27,9 +27,10 @@
     <script src="https://cdn.socket.io/4.7.5/socket.io.min.js" defer crossorigin="anonymous"></script>
     <!-- QRCode.js (deferred — only used when QR section is shown) -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js" defer crossorigin="anonymous"></script>
-    <!-- Firebase Auth SDK (deferred) -->
+    <!-- Firebase Auth + Firestore SDK (deferred) -->
     <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js" defer></script>
     <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js" defer></script>
+    <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js" defer></script>
     <script src="./client.js" defer></script>
     <script>if('serviceWorker' in navigator){window.addEventListener('load',()=>{navigator.serviceWorker.register('/sw.js').catch(()=>{});});}</script>
 </head>
@@ -99,6 +100,43 @@
             <h1 class="section__title">Configuración del Bot</h1>
             <p class="section__subtitle">Personaliza cómo tu bot responde a tus clientes.</p>
 
+            <!-- BotlyBot trigger banner -->
+            <div class="botlybot-trigger-bar">
+                <div class="botlybot-trigger-bar__info">
+                    <span class="botlybot-trigger-bar__icon">🤖</span>
+                    <div>
+                        <strong>¿No sabes por dónde empezar?</strong>
+                        <span>BotlyBot te hace las preguntas correctas y genera la configuración perfecta para tu negocio en segundos.</span>
+                    </div>
+                </div>
+                <button type="button" class="btn btn--accent" id="btn-open-botlybot">✨ Configurar con BotlyBot</button>
+            </div>
+
+            <!-- BotlyBot chat overlay -->
+            <div class="botlybot-overlay" id="botlybot-overlay">
+                <div class="botlybot-panel">
+                    <div class="botlybot-panel__header">
+                        <div class="botlybot-panel__header-info">
+                            <div class="botlybot-panel__avatar">🤖</div>
+                            <div>
+                                <strong>BotlyBot</strong>
+                                <span>Especialista en Configuración</span>
+                            </div>
+                        </div>
+                        <button type="button" class="botlybot-panel__close" id="btn-close-botlybot" aria-label="Cerrar">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" width="18" height="18"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                        </button>
+                    </div>
+                    <div class="botlybot-panel__messages" id="botlybot-messages"></div>
+                    <div class="botlybot-panel__input-area" id="botlybot-input-area">
+                        <textarea class="botlybot-panel__input" id="botlybot-input" rows="2" placeholder="Escribe tu respuesta..."></textarea>
+                        <button type="button" class="botlybot-panel__send" id="botlybot-send">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" width="18" height="18"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
+                        </button>
+                    </div>
+                </div>
+            </div>
+
             <form class="form" id="config-form" autocomplete="off">
                 <!-- Nombre del negocio -->
                 <div class="form__group">
@@ -106,79 +144,14 @@
                     <input class="form__input" type="text" id="businessName" name="businessName" placeholder="Ej: Pizzería Don Mario" required>
                 </div>
 
-                <!-- Descripción del negocio -->
+                <!-- Contexto unificado -->
                 <div class="form__group">
-                    <label class="form__label" for="businessDescription">Descripción del negocio</label>
-                    <textarea class="form__textarea" id="businessDescription" name="businessDescription" rows="3" placeholder="Breve descripción de lo que ofreces..."></textarea>
-                </div>
-
-                <!-- Horarios de atención -->
-                <fieldset class="form__fieldset">
-                    <legend class="form__legend">Horarios de atención</legend>
-                    <div class="schedule-grid">
-                        <div class="schedule-row" data-day="lunes">
-                            <label class="schedule-row__day">Lunes</label>
-                            <input class="form__input form__input--sm" type="time" name="schedule_lunes_open" value="09:00">
-                            <span class="schedule-row__sep">a</span>
-                            <input class="form__input form__input--sm" type="time" name="schedule_lunes_close" value="18:00">
-                            <label class="toggle"><input type="checkbox" name="schedule_lunes_active" checked><span class="toggle__slider"></span></label>
-                        </div>
-                        <div class="schedule-row" data-day="martes">
-                            <label class="schedule-row__day">Martes</label>
-                            <input class="form__input form__input--sm" type="time" name="schedule_martes_open" value="09:00">
-                            <span class="schedule-row__sep">a</span>
-                            <input class="form__input form__input--sm" type="time" name="schedule_martes_close" value="18:00">
-                            <label class="toggle"><input type="checkbox" name="schedule_martes_active" checked><span class="toggle__slider"></span></label>
-                        </div>
-                        <div class="schedule-row" data-day="miercoles">
-                            <label class="schedule-row__day">Miércoles</label>
-                            <input class="form__input form__input--sm" type="time" name="schedule_miercoles_open" value="09:00">
-                            <span class="schedule-row__sep">a</span>
-                            <input class="form__input form__input--sm" type="time" name="schedule_miercoles_close" value="18:00">
-                            <label class="toggle"><input type="checkbox" name="schedule_miercoles_active" checked><span class="toggle__slider"></span></label>
-                        </div>
-                        <div class="schedule-row" data-day="jueves">
-                            <label class="schedule-row__day">Jueves</label>
-                            <input class="form__input form__input--sm" type="time" name="schedule_jueves_open" value="09:00">
-                            <span class="schedule-row__sep">a</span>
-                            <input class="form__input form__input--sm" type="time" name="schedule_jueves_close" value="18:00">
-                            <label class="toggle"><input type="checkbox" name="schedule_jueves_active" checked><span class="toggle__slider"></span></label>
-                        </div>
-                        <div class="schedule-row" data-day="viernes">
-                            <label class="schedule-row__day">Viernes</label>
-                            <input class="form__input form__input--sm" type="time" name="schedule_viernes_open" value="09:00">
-                            <span class="schedule-row__sep">a</span>
-                            <input class="form__input form__input--sm" type="time" name="schedule_viernes_close" value="18:00">
-                            <label class="toggle"><input type="checkbox" name="schedule_viernes_active" checked><span class="toggle__slider"></span></label>
-                        </div>
-                        <div class="schedule-row" data-day="sabado">
-                            <label class="schedule-row__day">Sábado</label>
-                            <input class="form__input form__input--sm" type="time" name="schedule_sabado_open" value="10:00">
-                            <span class="schedule-row__sep">a</span>
-                            <input class="form__input form__input--sm" type="time" name="schedule_sabado_close" value="14:00">
-                            <label class="toggle"><input type="checkbox" name="schedule_sabado_active" checked><span class="toggle__slider"></span></label>
-                        </div>
-                        <div class="schedule-row" data-day="domingo">
-                            <label class="schedule-row__day">Domingo</label>
-                            <input class="form__input form__input--sm" type="time" name="schedule_domingo_open" value="00:00">
-                            <span class="schedule-row__sep">a</span>
-                            <input class="form__input form__input--sm" type="time" name="schedule_domingo_close" value="00:00">
-                            <label class="toggle"><input type="checkbox" name="schedule_domingo_active"><span class="toggle__slider"></span></label>
-                        </div>
-                    </div>
-                </fieldset>
-
-                <!-- Menú de productos/servicios -->
-                <div class="form__group">
-                    <label class="form__label" for="menu">Menú de productos / servicios</label>
-                    <textarea class="form__textarea form__textarea--lg" id="menu" name="menu" rows="10" placeholder="Escribe tu menú aquí. Ejemplo:&#10;🍕 Pizza Margarita — $8.00&#10;🍕 Pizza Pepperoni — $9.50&#10;🥤 Refresco 500ml — $2.00"></textarea>
-                </div>
-
-                <!-- Prompt personalizado -->
-                <div class="form__group">
-                    <label class="form__label" for="botPrompt">Contexto / Personalidad del Bot (Prompt para Gemini)</label>
-                    <textarea class="form__textarea form__textarea--lg" id="botPrompt" name="botPrompt" rows="8" placeholder="Ej: Eres un asistente amable de la Pizzería Don Mario. Responde en español, sé breve y ofrece el menú cuando te lo pidan..."></textarea>
-                    <span class="form__hint">Este texto se envía a Gemini como instrucciones del sistema. Define el tono, idioma y comportamiento del bot.</span>
+                    <label class="form__label" for="botPrompt">
+                        Contexto del Bot
+                        <span class="form__label-hint">— usa ✨ BotlyBot para generarlo automáticamente</span>
+                    </label>
+                    <textarea class="form__textarea form__textarea--xl" id="botPrompt" name="botPrompt" rows="20" placeholder="Pega aquí la configuración generada por BotlyBot, o escribe directamente el contexto de tu bot: horarios, products, personalidad, instrucciones..."></textarea>
+                    <span class="form__hint">Todo lo que escribas aquí se envía a Gemini como instrucciones del sistema. BotlyBot puede pre-llenarlo por ti en segundos.</span>
                 </div>
 
                 <!-- Actions -->
@@ -188,8 +161,41 @@
                         Guardar configuración
                     </button>
                     <button type="button" class="btn btn--ghost" id="btn-reset-draft">Descartar borrador</button>
+                    <button type="button" class="btn btn--outline-accent" id="btn-open-testbot">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+                        Probar el bot
+                    </button>
                 </div>
             </form>
+
+            <!-- Test Bot Chat Panel -->
+            <div class="testbot-panel" id="testbot-panel" style="display:none;">
+                <div class="testbot-panel__header">
+                    <div class="testbot-panel__header-info">
+                        <div class="testbot-panel__avatar">🤖</div>
+                        <div>
+                            <strong id="testbot-title">Probando tu bot</strong>
+                            <span>Escríbele como si fueras un cliente</span>
+                        </div>
+                    </div>
+                    <button type="button" class="testbot-panel__clear" id="btn-clear-testbot" title="Limpiar conversación">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="15" height="15"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/></svg>
+                        Limpiar
+                    </button>
+                </div>
+                <div class="testbot-panel__messages" id="testbot-messages">
+                    <div class="testbot-welcome" id="testbot-welcome">
+                        <span>💬</span>
+                        <p>Envía un mensaje para empezar la prueba.<br>El bot responderá usando tu configuración actual guardada.</p>
+                    </div>
+                </div>
+                <div class="testbot-panel__input-area">
+                    <textarea class="testbot-panel__input" id="testbot-input" rows="1" placeholder="Ej: Hola, ¿qué tienen disponible?"></textarea>
+                    <button type="button" class="testbot-panel__send" id="testbot-send">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" width="17" height="17"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
+                    </button>
+                </div>
+            </div>
 
             <!-- Toast notification -->
             <div class="toast" id="toast" role="alert"></div>
@@ -198,51 +204,200 @@
         <!-- ---- SECTION: Conexión WhatsApp ---- -->
         <section class="section section--hidden" id="section-connection">
             <h1 class="section__title">Conexión WhatsApp</h1>
-            <p class="section__subtitle">Escanea el código QR con tu app de WhatsApp para vincular el bot.</p>
+            <p class="section__subtitle">Vincula tu número de WhatsApp con el bot para comenzar a automatizar.</p>
+
+            <!-- Status badge (top) -->
+            <div class="conn-status-badge" id="conn-status-badge">
+                <span class="status-dot status-dot--off" id="conn-dot"></span>
+                <span id="conn-label">Desconectado</span>
+            </div>
 
             <div class="connection-panel">
-                <div class="qr-container" id="qr-container">
-                    <div class="qr-placeholder" id="qr-placeholder">
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" class="qr-placeholder__icon">
-                            <rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><circle cx="17.5" cy="17.5" r="3.5"/>
-                        </svg>
-                        <p>Esperando código QR…</p>
-                        <span class="qr-placeholder__hint">Asegúrate de haber guardado tu configuración primero.</span>
+
+                <!-- ══ LEFT: Linking Card ══ -->
+                <div class="link-card" id="qr-container">
+
+                    <!-- Segmented method switcher -->
+                    <div class="link-switcher" id="link-tabs">
+                        <button class="link-switcher__btn link-switcher__btn--active" id="tab-qr" data-link-tab="qr">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="15" height="15"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><path d="M14 14h2v2h-2z"/><path d="M18 14h3"/><path d="M14 18h2"/><path d="M18 18h3v3h-3z"/></svg>
+                            Código QR
+                        </button>
+                        <button class="link-switcher__btn" id="tab-phone" data-link-tab="phone">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="15" height="15"><rect x="5" y="2" width="14" height="20" rx="2"/><line x1="12" y1="18" x2="12.01" y2="18"/></svg>
+                            Código por teléfono
+                        </button>
                     </div>
-                    <div id="qr-canvas" class="qr-canvas qr-canvas--hidden"></div>
+
+                    <!-- ─── QR View ─── -->
+                    <div class="link-view" id="link-view-qr">
+                        <div class="qr-frame" id="qr-frame">
+                            <div class="qr-placeholder" id="qr-placeholder">
+                                <div class="qr-placeholder__rings">
+                                    <span></span><span></span><span></span>
+                                </div>
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.2" class="qr-placeholder__icon">
+                                    <rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><path d="M14 14h2v2h-2z"/><path d="M18 14h3"/><path d="M14 18h2"/><path d="M18 18h3v3h-3z"/>
+                                </svg>
+                                <p>Esperando QR…</p>
+                                <span>Haz clic en <strong>Iniciar Bot</strong></span>
+                            </div>
+                            <div id="qr-canvas" class="qr-canvas qr-canvas--hidden"></div>
+                        </div>
+
+                        <p class="link-view__tip">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="13" height="13"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+                            El QR expira en 60 segundos. Si caduca, reinicia el bot.
+                        </p>
+                    </div>
+
+                    <!-- ─── Phone Pairing View ─── -->
+                    <div class="link-view link-view--hidden" id="link-view-phone">
+                        <div class="phone-pair">
+
+                            <div class="phone-pair__label">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14"><rect x="5" y="2" width="14" height="20" rx="2"/><line x1="12" y1="18" x2="12.01" y2="18"/></svg>
+                                Ingresa tu número de WhatsApp
+                            </div>
+
+                            <div class="phone-pair__field">
+                                <!-- Country code selector with flags -->
+                                <div class="country-select-wrap">
+                                    <select id="country-code-select" class="country-select">
+                                        <option value="52">🇲🇽 México (+52)</option>
+                                        <option value="1">🇺🇸 USA (+1)</option>
+                                        <option value="1-CA">🇨🇦 Canadá (+1)</option>
+                                        <option value="54">🇦🇷 Argentina (+54)</option>
+                                        <option value="55">🇧🇷 Brasil (+55)</option>
+                                        <option value="56">🇨🇱 Chile (+56)</option>
+                                        <option value="57">🇨🇴 Colombia (+57)</option>
+                                        <option value="58">🇻🇪 Venezuela (+58)</option>
+                                        <option value="51">🇵🇪 Perú (+51)</option>
+                                        <option value="593">🇪🇨 Ecuador (+593)</option>
+                                        <option value="595">🇵🇾 Paraguay (+595)</option>
+                                        <option value="598">🇺🇾 Uruguay (+598)</option>
+                                        <option value="591">🇧🇴 Bolivia (+591)</option>
+                                        <option value="506">🇨🇷 Costa Rica (+506)</option>
+                                        <option value="507">🇵🇦 Panamá (+507)</option>
+                                        <option value="503">🇸🇻 El Salvador (+503)</option>
+                                        <option value="502">🇬🇹 Guatemala (+502)</option>
+                                        <option value="504">🇭🇳 Honduras (+504)</option>
+                                        <option value="505">🇳🇮 Nicaragua (+505)</option>
+                                        <option value="1809">🇩🇴 R. Dominicana (+1809)</option>
+                                        <option value="34">🇪🇸 España (+34)</option>
+                                        <option value="44">🇬🇧 Reino Unido (+44)</option>
+                                        <option value="33">🇫🇷 Francia (+33)</option>
+                                        <option value="49">🇩🇪 Alemania (+49)</option>
+                                        <option value="39">🇮🇹 Italia (+39)</option>
+                                        <option value="351">🇵🇹 Portugal (+351)</option>
+                                        <option value="7">🇷🇺 Rusia (+7)</option>
+                                        <option value="86">🇨🇳 China (+86)</option>
+                                        <option value="91">🇮🇳 India (+91)</option>
+                                        <option value="81">🇯🇵 Japón (+81)</option>
+                                        <option value="82">🇰🇷 Corea del Sur (+82)</option>
+                                        <option value="971">🇦🇪 Emiratos (+971)</option>
+                                        <option value="966">🇸🇦 Arabia Saudí (+966)</option>
+                                        <option value="20">🇪🇬 Egipto (+20)</option>
+                                        <option value="27">🇿🇦 Sudáfrica (+27)</option>
+                                        <option value="234">🇳🇬 Nigeria (+234)</option>
+                                        <option value="61">🇦🇺 Australia (+61)</option>
+                                    </select>
+                                </div>
+                                <input type="tel" id="phone-input" class="phone-pair__input" placeholder="1234567890" maxlength="12" inputmode="numeric" />
+                            </div>
+
+                            <button class="btn-get-code" id="btn-request-code">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+                                Obtener código de vinculación
+                            </button>
+
+                            <!-- Code display (hidden until code arrives) -->
+                            <div class="pairing-code-box" id="pairing-code-box" style="display:none;">
+                                <div class="pairing-code-box__header">
+                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16"><polyline points="20 6 9 17 4 12"/></svg>
+                                    Código listo — introdúcelo en WhatsApp
+                                </div>
+                                <div class="pairing-code-box__code" id="pairing-code-display"></div>
+                                <div class="pairing-code-box__path">
+                                    <span>WhatsApp</span>
+                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="12" height="12"><polyline points="9 18 15 12 9 6"/></svg>
+                                    <span>Ajustes</span>
+                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="12" height="12"><polyline points="9 18 15 12 9 6"/></svg>
+                                    <span>Dispositivos vinculados</span>
+                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="12" height="12"><polyline points="9 18 15 12 9 6"/></svg>
+                                    <span>Vincular con número</span>
+                                </div>
+                            </div>
+
+                        </div>
+
+                        <p class="link-view__tip">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="13" height="13"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+                            Primero haz clic en <strong>Iniciar Bot</strong>, luego solicita el código.
+                        </p>
+                    </div>
+
                 </div>
 
+                <!-- ══ RIGHT: Info + Actions ══ -->
                 <div class="connection-info">
-                    <div class="connection-status" id="connection-status">
-                        <span class="status-dot status-dot--off" id="conn-dot"></span>
-                        <span id="conn-label">Desconectado</span>
-                    </div>
 
-                    <div class="connection-steps">
-                        <h3>Instrucciones</h3>
+                    <!-- Instructions card -->
+                    <div class="connection-steps" id="conn-steps-qr">
+                        <div class="connection-steps__badge">QR</div>
+                        <h3>Cómo vincular por QR</h3>
                         <ol>
-                            <li>Guarda tu configuración en la sección anterior.</li>
-                            <li>Haz clic en <strong>"Iniciar Bot"</strong> abajo.</li>
+                            <li>Guarda tu configuración en la sección <strong>Configuración</strong>.</li>
+                            <li>Presiona <strong>"Iniciar Bot"</strong> y espera el código QR.</li>
                             <li>Abre WhatsApp en tu teléfono.</li>
                             <li>Ve a <strong>Ajustes → Dispositivos vinculados → Vincular dispositivo</strong>.</li>
-                            <li>Escanea el código QR que aparecerá aquí.</li>
+                            <li>Escanea el QR que aparece aquí.</li>
                         </ol>
                     </div>
 
+                    <div class="connection-steps connection-steps--hidden" id="conn-steps-phone">
+                        <div class="connection-steps__badge">📱</div>
+                        <h3>Cómo vincular por código</h3>
+                        <ol>
+                            <li>Guarda tu configuración en la sección <strong>Configuración</strong>.</li>
+                            <li>Presiona <strong>"Iniciar Bot"</strong>.</li>
+                            <li>Selecciona tu país e ingresa tu número.</li>
+                            <li>Presiona <strong>"Obtener código"</strong>.</li>
+                            <li>En WhatsApp: <strong>Ajustes → Dispositivos vinculados → Vincular con número de teléfono</strong>.</li>
+                            <li>Introduce el código de 8 dígitos mostrado aquí.</li>
+                        </ol>
+                    </div>
+
+                    <!-- Action buttons -->
                     <div class="connection-actions">
-                        <button class="btn btn--success btn--lg" id="btn-start-bot">
-                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="5 3 19 12 5 21 5 3"/></svg>
-                            Iniciar Bot
+                        <button class="conn-btn conn-btn--start" id="btn-start-bot">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+                            <span>
+                                <strong>Iniciar Bot</strong>
+                                <small>Conectar a WhatsApp</small>
+                            </span>
                         </button>
-                        <button class="btn btn--danger" id="btn-stop-bot" disabled>
-                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="6" y="6" width="12" height="12"/></svg>
-                            Detener Bot
+                        <button class="conn-btn conn-btn--stop" id="btn-stop-bot" disabled>
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><rect x="6" y="6" width="12" height="12" rx="1"/></svg>
+                            <span>
+                                <strong>Detener Bot</strong>
+                                <small>Desconectar sesión</small>
+                            </span>
                         </button>
-                        <button class="btn btn--warning" id="btn-reset-bot">
+                        <button class="conn-btn conn-btn--reset" id="btn-reset-bot">
                             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M23 4v6h-6"/><path d="M1 20v-6h6"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
-                            Formatear dispositivos (nuevo QR)
+                            <span>
+                                <strong>Formatear</strong>
+                                <small>Generar nuevo QR</small>
+                            </span>
                         </button>
                     </div>
+
+                    <!-- Connection status (also reflected in top badge) -->
+                    <div class="connection-status" id="connection-status" style="display:none;">
+                        <span class="status-dot" id="conn-dot-hidden"></span>
+                    </div>
+
                 </div>
             </div>
         </section>
@@ -275,102 +430,115 @@
                     <span>El bot está <strong>pausado</strong> — los mensajes se reciben pero no se responden automáticamente.</span>
                 </div>
 
-                <div id="inbox-view">
-                    <div class="inbox-header">
-                        <div class="inbox-header__left">
-                            <h1 class="section__title">
-                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="22" height="22" style="vertical-align:middle;margin-right:.4rem;opacity:.6"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
-                                Conversaciones
-                            </h1>
-                            <span class="inbox-header__count" id="inbox-count">0 chats</span>
-                        </div>
-                        <div class="inbox-header__actions">
-                            <!-- Pause/Resume bot toggle -->
-                            <button class="btn btn--pause btn--sm" id="btn-pause-bot" disabled title="Pausar bot">
-                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16"><rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/></svg>
-                                <span id="pause-bot-label">Pausar</span>
-                            </button>
-                            <!-- Response mode toggle -->
-                            <div class="response-mode-toggle" id="response-mode-toggle">
-                                <span class="response-mode-label" id="response-mode-label">Automático</span>
-                                <label class="toggle">
-                                    <input type="checkbox" id="response-mode-switch">
-                                    <span class="toggle__slider"></span>
-                                </label>
-                                <span class="response-mode-label response-mode-label--alt" id="response-mode-label-alt">Semi-auto</span>
-                            </div>
-                            <div class="inbox-search-wrap">
-                                <svg class="inbox-search-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="15" height="15"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
-                                <input class="form__input inbox-search" type="text" id="inbox-search" placeholder="Buscar contacto...">
-                            </div>
-                            <button class="btn btn--danger btn--sm" id="btn-clear-messages" title="Borrar historial">
-                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
-                            </button>
-                        </div>
+                <!-- Pending message alert (semi-auto mode) -->
+                <div class="pending-alert pending-alert--hidden" id="pending-alert">
+                    <div class="pending-alert__icon">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
                     </div>
-
-                    <!-- Pending message alert (semi-auto mode) -->
-                    <div class="pending-alert pending-alert--hidden" id="pending-alert">
-                        <div class="pending-alert__icon">
-                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
-                        </div>
-                        <div class="pending-alert__body">
-                            <strong id="pending-alert-name">Contacto</strong>
-                            <p id="pending-alert-text">Mensaje pendiente...</p>
-                        </div>
-                        <div class="pending-alert__actions">
-                            <button class="btn btn--primary btn--sm" id="btn-approve-reply">
-                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14"><path d="M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20z"/><path d="M12 8v4l3 3"/></svg>
-                                Responder con Bot
-                            </button>
-                            <button class="btn btn--outline btn--sm" id="btn-manual-reply">
-                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
-                                Manual
-                            </button>
-                            <button class="btn btn--ghost btn--sm" id="btn-dismiss-alert">
-                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
-                            </button>
-                        </div>
+                    <div class="pending-alert__body">
+                        <strong id="pending-alert-name">Contacto</strong>
+                        <p id="pending-alert-text">Mensaje pendiente...</p>
                     </div>
-
-                    <div class="inbox-empty" id="inbox-empty">
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
-                        <p>No hay conversaciones aún.</p>
-                        <span>Los mensajes aparecerán aquí cuando alguien escriba al bot.</span>
-                    </div>
-
-                    <div class="inbox-list" id="inbox-list"></div>
-                </div>
-
-                <!-- CHAT VIEW: single conversation -->
-                <div id="chat-view" class="chat-view chat-view--hidden">
-                    <div class="chat-topbar">
-                        <button class="btn btn--ghost btn--icon" id="btn-back-inbox">
-                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="15 18 9 12 15 6"/></svg>
+                    <div class="pending-alert__actions">
+                        <button class="btn btn--primary btn--sm" id="btn-approve-reply">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14"><path d="M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20z"/><path d="M12 8v4l3 3"/></svg>
+                            Responder con Bot
                         </button>
-                        <div class="chat-topbar__info">
-                            <span class="chat-topbar__name" id="chat-contact-name">Contacto</span>
-                            <span class="chat-topbar__phone" id="chat-contact-phone">+00 000 000 0000</span>
-                        </div>
-                        <div class="chat-topbar__status">
-                            <button class="btn btn--ghost btn--sm chat-pause-btn" id="btn-pause-chat" title="Pausar bot en este chat">
-                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16"><rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/></svg>
-                                <span id="pause-btn-label">Pausar</span>
-                            </button>
-                            <span class="status-dot status-dot--on" id="chat-bot-dot"></span>
-                            <span id="chat-bot-label">Bot activo</span>
-                        </div>
-                    </div>
-
-                    <div class="chat-messages" id="chat-messages"></div>
-
-                    <div class="chat-input-bar">
-                        <textarea class="chat-input" id="chat-input" rows="1" placeholder="Escribe un mensaje manual..."></textarea>
-                        <button class="btn btn--primary btn--icon" id="btn-send-message">
-                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
+                        <button class="btn btn--outline btn--sm" id="btn-manual-reply">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+                            Manual
+                        </button>
+                        <button class="btn btn--ghost btn--sm" id="btn-dismiss-alert">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
                         </button>
                     </div>
                 </div>
+
+                <!-- ▌ WhatsApp-style split panel ▌ -->
+                <div class="wa-layout" id="wa-layout">
+
+                    <!-- LEFT PANEL: Contact list -->
+                    <div class="wa-sidebar" id="inbox-view">
+                        <div class="wa-sidebar__head">
+                            <div class="wa-sidebar__title-row">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18" style="opacity:.6;flex-shrink:0"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+                                <span class="wa-sidebar__title">Conversaciones</span>
+                                <span class="wa-sidebar__badge" id="inbox-count">0</span>
+                                <div style="flex:1"></div>
+                                <button class="btn btn--pause wa-btn-sm" id="btn-pause-bot" disabled title="Pausar bot">
+                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="13" height="13"><rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/></svg>
+                                    <span id="pause-bot-label">Pausar</span>
+                                </button>
+                                <button class="btn btn--ghost wa-btn-icon" id="btn-clear-messages" title="Borrar historial">
+                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="15" height="15"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
+                                </button>
+                            </div>
+                            <div class="wa-sidebar__mode-row">
+                                <div class="response-mode-toggle" id="response-mode-toggle">
+                                    <span class="response-mode-label" id="response-mode-label">Automático</span>
+                                    <label class="toggle">
+                                        <input type="checkbox" id="response-mode-switch">
+                                        <span class="toggle__slider"></span>
+                                    </label>
+                                    <span class="response-mode-label response-mode-label--alt" id="response-mode-label-alt">Semi-auto</span>
+                                </div>
+                            </div>
+                            <div class="wa-sidebar__search">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+                                <input class="wa-sidebar__search-input" type="text" id="inbox-search" placeholder="Buscar contacto...">
+                            </div>
+                        </div>
+                        <div class="wa-sidebar__body">
+                            <div class="inbox-empty" id="inbox-empty">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+                                <p>Sin conversaciones</p>
+                                <span>Los mensajes aparecerán aquí cuando alguien le escriba al bot.</span>
+                            </div>
+                            <div class="inbox-list" id="inbox-list"></div>
+                        </div>
+                    </div>
+
+                    <!-- RIGHT PANEL: Chat -->
+                    <div class="wa-chat chat-view--hidden" id="chat-view">
+                        <!-- Placeholder (no chat selected) -->
+                        <div class="wa-chat__placeholder">
+                            <div class="wa-chat__placeholder-icon">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1" width="72" height="72"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+                            </div>
+                            <h3>Tus conversaciones</h3>
+                            <p>Selecciona un chat de la lista para ver los mensajes</p>
+                        </div>
+                        <!-- Chat content (shown when a conversation is active) -->
+                        <div class="wa-chat__content" id="chat-content">
+                            <div class="chat-topbar">
+                                <button class="btn btn--ghost wa-btn-icon chat-back-btn" id="btn-back-inbox">
+                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" width="18" height="18"><polyline points="15 18 9 12 15 6"/></svg>
+                                </button>
+                                <div class="chat-topbar__avatar" id="chat-contact-avatar"></div>
+                                <div class="chat-topbar__info">
+                                    <span class="chat-topbar__name" id="chat-contact-name">Contacto</span>
+                                    <span class="chat-topbar__phone" id="chat-contact-phone">+00 000 000 0000</span>
+                                </div>
+                                <div class="chat-topbar__status">
+                                    <button class="btn btn--ghost wa-btn-sm chat-pause-btn" id="btn-pause-chat" title="Pausar bot en este chat">
+                                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14"><rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/></svg>
+                                        <span id="pause-btn-label">Pausar chat</span>
+                                    </button>
+                                    <span class="status-dot status-dot--on" id="chat-bot-dot"></span>
+                                    <span id="chat-bot-label">Bot activo</span>
+                                </div>
+                            </div>
+                            <div class="chat-messages" id="chat-messages"></div>
+                            <div class="chat-input-bar">
+                                <textarea class="chat-input" id="chat-input" rows="1" placeholder="Escribe un mensaje manual..."></textarea>
+                                <button class="btn btn--primary btn--icon" id="btn-send-message">
+                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+
+                </div><!-- /wa-layout -->
             </div>
 
             <!-- ═══ TAB: FILTROS DE RESPUESTA ═══ -->
@@ -492,6 +660,16 @@
                         <div class="scheduled-form__field">
                             <label>Mensaje</label>
                             <textarea class="form__input" id="sched-message" rows="3" placeholder="Escribe el mensaje que se enviará al grupo..."></textarea>
+                        </div>
+                        <div class="scheduled-form__row">
+                            <div class="scheduled-form__field">
+                                <label>Hora de inicio del rango</label>
+                                <input type="time" class="form__input" id="sched-start-hour" value="08:00">
+                            </div>
+                            <div class="scheduled-form__field">
+                                <label>Hora de fin del rango</label>
+                                <input type="time" class="form__input" id="sched-end-hour" value="21:00">
+                            </div>
                         </div>
                         <div class="scheduled-form__actions">
                             <button class="btn btn--primary" id="btn-add-scheduled">

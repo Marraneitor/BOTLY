@@ -432,6 +432,35 @@ app.post('/api/bot/stop', authMiddleware, async (req, res) => {
     res.json({ ok: true, message: 'Bot detenido.' });
 });
 
+// Request pairing code — alternative to QR for mobile linking
+app.post('/api/bot/request-pairing-code', authMiddleware, async (req, res) => {
+    const { phone } = req.body;
+    if (!phone) return res.status(400).json({ error: 'Se requiere el número de teléfono.' });
+
+    const cleanPhone = phone.replace(/\D/g, '');
+    if (cleanPhone.length < 7) return res.status(400).json({ error: 'Número de teléfono inválido.' });
+
+    const bot = userBots.get(req.uid);
+    if (!bot || !bot.sock) {
+        return res.status(400).json({ error: 'Inicia el bot primero y espera a que aparezca el QR.' });
+    }
+    if (bot.status === 'connected') {
+        return res.status(400).json({ error: 'El bot ya está conectado.' });
+    }
+
+    try {
+        const code = await bot.sock.requestPairingCode(cleanPhone);
+        console.log(`[Bot][${req.email}] 📱 Pairing code requested: ${code}`);
+        // Emit back via socket too so any open tab gets it
+        const room = `user_${req.uid}`;
+        io.to(room).emit('pairing_code', code);
+        res.json({ ok: true, code });
+    } catch (e) {
+        console.error(`[Bot][${req.email}] Pairing code error:`, e.message);
+        res.status(500).json({ error: e.message || 'Error al solicitar código de vinculación.' });
+    }
+});
+
 // Pause bot globally — keeps WhatsApp connection alive, stops responding to messages
 app.post('/api/bot/pause', authMiddleware, async (req, res) => {
     const bot = userBots.get(req.uid);
@@ -1108,6 +1137,23 @@ app.post('/api/config/scheduled-messages', authMiddleware, async (req, res) => {
     res.json({ ok: true, data: messages });
 });
 
+// ─── Bot Test Chat ───────────────────────────────────────
+app.post('/api/bot/test-message', authMiddleware, async (req, res) => {
+    const { message } = req.body;
+    if (!message || typeof message !== 'string') {
+        return res.status(400).json({ error: 'Se requiere un mensaje.' });
+    }
+    try {
+        const config = await loadUserConfig(req.uid);
+        const testChatId = `test::${req.uid}`;
+        const reply = await getAIResponse(req.uid, testChatId, message.trim(), 'Cliente', config);
+        res.json({ ok: true, reply });
+    } catch (e) {
+        console.error(`[TestBot] Error for ${req.email}:`, e.message);
+        res.status(500).json({ error: e.message || 'Error al generar respuesta.' });
+    }
+});
+
 // ─── Scheduled Messages Timer System ───
 const scheduledTimers = new Map(); // uid -> intervalId[]
 
@@ -1144,6 +1190,21 @@ function restartScheduledTimers(uid) {
                     if (!currentBot || currentBot.status !== 'connected' || !currentBot.sock) {
                         return;
                     }
+
+                    // Enforce time window (timeWindowStart / timeWindowEnd are "HH:MM" strings)
+                    if (msg.timeWindowStart && msg.timeWindowEnd) {
+                        const now = new Date();
+                        const currentMinutes = now.getHours() * 60 + now.getMinutes();
+                        const [sh, sm] = msg.timeWindowStart.split(':').map(Number);
+                        const [eh, em] = msg.timeWindowEnd.split(':').map(Number);
+                        const startMinutes = sh * 60 + sm;
+                        const endMinutes   = eh * 60 + em;
+                        if (currentMinutes < startMinutes || currentMinutes > endMinutes) {
+                            console.log(`[Scheduled] Skipping "${msg.groupName || msg.groupId}" — outside time window (${msg.timeWindowStart}–${msg.timeWindowEnd})`);
+                            return;
+                        }
+                    }
+
                     const jid = msg.groupId.includes('@') ? msg.groupId : msg.groupId;
                     await currentBot.sock.sendMessage(jid, { text: msg.message });
 
