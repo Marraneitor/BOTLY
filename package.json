@@ -1,0 +1,11 @@
+{
+  "name": "botly",
+  "version": "1.0.0",
+  "scripts": {
+    "start": "npm --prefix whatsapp-bot-saas start",
+    "build": "npm --prefix whatsapp-bot-saas install"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}
