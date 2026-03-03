@@ -35,85 +35,6 @@
     // --- User info ---
     var user = JSON.parse(localStorage.getItem('botsaas_user') || '{}');
 
-    // ─── Firebase / Firestore — cross-device config sync ──────────────────────
-    var _FB_CONFIG = {
-        apiKey:            'AIzaSyCcBN4HTgTdYLJR4VfCnAs7hlWWD-VnHb8',
-        authDomain:        'chatbot-1d169.firebaseapp.com',
-        projectId:         'chatbot-1d169',
-        storageBucket:     'chatbot-1d169.firebasestorage.app',
-        messagingSenderId: '376839837560',
-        appId:             '1:376839837560:web:0af7208dc4f81b487f9a8d'
-    };
-    var _db = null;
-
-    function getDB() {
-        if (_db) return _db;
-        try {
-            if (typeof firebase === 'undefined') return null;
-            if (!firebase.apps.length) firebase.initializeApp(_FB_CONFIG);
-            _db = firebase.firestore();
-        } catch (e) { console.warn('[Firestore] init:', e); }
-        return _db;
-    }
-
-    function _userRef() {
-        var db = getDB();
-        if (!db || !user.uid) return null;
-        return db.collection('users').doc(user.uid);
-    }
-
-    // Save main bot config (form data) to Firestore
-    function saveConfigToFirestore(data) {
-        var ref = _userRef();
-        if (!ref) return Promise.resolve();
-        return ref.set({ botConfig: data, updatedAt: Date.now() }, { merge: true })
-            .catch(function(e) { console.warn('[Firestore] saveConfig:', e); });
-    }
-
-    // Load main bot config from Firestore
-    function loadConfigFromFirestore() {
-        var ref = _userRef();
-        if (!ref) return Promise.resolve(null);
-        return ref.get().then(function(snap) {
-            return snap.exists ? (snap.data().botConfig || null) : null;
-        }).catch(function() { return null; });
-    }
-
-    // Save message filters to Firestore
-    function saveFiltersToFirestore(data) {
-        var ref = _userRef();
-        if (!ref) return Promise.resolve();
-        return ref.set({ messageFilters: data }, { merge: true })
-            .catch(function(e) { console.warn('[Firestore] saveFilters:', e); });
-    }
-
-    // Load message filters from Firestore
-    function loadFiltersFromFirestore() {
-        var ref = _userRef();
-        if (!ref) return Promise.resolve(null);
-        return ref.get().then(function(snap) {
-            return snap.exists ? (snap.data().messageFilters || null) : null;
-        }).catch(function() { return null; });
-    }
-
-    // Save response mode to Firestore
-    function saveResponseModeToFirestore(mode) {
-        var ref = _userRef();
-        if (!ref) return Promise.resolve();
-        return ref.set({ responseMode: mode }, { merge: true })
-            .catch(function(e) { console.warn('[Firestore] saveResponseMode:', e); });
-    }
-
-    // Load response mode from Firestore
-    function loadResponseModeFromFirestore() {
-        var ref = _userRef();
-        if (!ref) return Promise.resolve(null);
-        return ref.get().then(function(snap) {
-            return snap.exists ? (snap.data().responseMode || null) : null;
-        }).catch(function() { return null; });
-    }
-    // ─────────────────────────────────────────────────────────────────────────
-
     // Inject user bar into sidebar
     function renderUserBar() {
         var brand = $('.sidebar__brand');
@@ -177,15 +98,6 @@
     var btnPauseBot  = $('#btn-pause-bot');
     var pauseBanner  = $('#pause-banner');
     var btnResetDraft = $('#btn-reset-draft');
-    var btnRequestCode = $('#btn-request-code');
-    var phoneInput   = $('#phone-input');
-    var countrySelect = $('#country-code-select');
-    var pairingCodeBox = $('#pairing-code-box');
-    var pairingCodeDisplay = $('#pairing-code-display');
-    var linkViewQR   = $('#link-view-qr');
-    var linkViewPhone = $('#link-view-phone');
-    var connStepsQR  = $('#conn-steps-qr');
-    var connStepsPhone = $('#conn-steps-phone');
 
     // --- State ---
     var socket = null;
@@ -328,8 +240,19 @@
         var fd = new FormData(configForm);
         var data = {};
 
-        ['businessName', 'botPrompt'].forEach(function(k) {
+        ['businessName', 'businessDescription', 'menu', 'botPrompt'].forEach(function(k) {
             data[k] = fd.get(k) || '';
+        });
+
+        var days = ['lunes', 'martes', 'miercoles', 'jueves', 'viernes', 'sabado', 'domingo'];
+        data.schedule = {};
+        days.forEach(function(d) {
+            var cb = configForm.querySelector('[name="schedule_' + d + '_active"]');
+            data.schedule[d] = {
+                open:   fd.get('schedule_' + d + '_open') || '00:00',
+                close:  fd.get('schedule_' + d + '_close') || '00:00',
+                active: cb ? cb.checked : false
+            };
         });
 
         return data;
@@ -338,10 +261,22 @@
     function hydrateForm(data) {
         if (!data || !configForm) return;
 
-        ['businessName', 'botPrompt'].forEach(function(k) {
+        ['businessName', 'businessDescription', 'menu', 'botPrompt'].forEach(function(k) {
             var el = configForm.querySelector('[name="' + k + '"]');
             if (el && data[k] !== undefined) el.value = data[k];
         });
+
+        if (data.schedule) {
+            Object.keys(data.schedule).forEach(function(day) {
+                var val = data.schedule[day];
+                var o = configForm.querySelector('[name="schedule_' + day + '_open"]');
+                var c = configForm.querySelector('[name="schedule_' + day + '_close"]');
+                var a = configForm.querySelector('[name="schedule_' + day + '_active"]');
+                if (o) o.value = val.open;
+                if (c) c.value = val.close;
+                if (a) a.checked = val.active;
+            });
+        }
     }
 
     // --- Form Submit ---
@@ -359,8 +294,6 @@
                 body: JSON.stringify(data)
             }).then(function() {
                 clearDraft();
-                // Save to Firestore so config is available on any device
-                saveConfigToFirestore(data);
                 showToast('Configuracion guardada correctamente');
             }).catch(function(err) {
                 saveDraft();
@@ -419,18 +352,6 @@
             showToast('Bot desconectado: ' + (reason || 'desconocido'), 'error');
         });
 
-        socket.on('pairing_code', function(code) {
-            if (pairingCodeBox && pairingCodeDisplay) {
-                pairingCodeDisplay.textContent = code;
-                pairingCodeBox.style.display = 'block';
-            }
-            showToast('Código de vinculación listo: ' + code, 'success');
-        });
-
-        socket.on('pairing_code_error', function(msg) {
-            showToast(msg || 'Error al generar el código de vinculación', 'error');
-        });
-
         // Global pause state from server
         socket.on('bot_paused', function(paused) {
             setBotPausedState(paused);
@@ -472,6 +393,28 @@
 
         socket.on('auth_error', function(msg) { showToast(msg || 'Error de autenticacion', 'error'); });
         socket.on('connect_error', function() { console.warn('[Socket] Error de conexion'); });
+
+        // Pairing code response
+        socket.on('pairing_code', function(code) {
+            if (btnRequestCode) {
+                btnRequestCode.disabled = false;
+                btnRequestCode.innerHTML =
+                    '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>' +
+                    ' Obtener código de vinculación';
+            }
+            if (pairingCodeDisp) pairingCodeDisp.textContent = code || '';
+            if (pairingCodeBox)  pairingCodeBox.style.display = '';
+            showToast('Código listo — introdúcelo en WhatsApp', 'success');
+        });
+        socket.on('pairing_code_error', function(msg) {
+            if (btnRequestCode) {
+                btnRequestCode.disabled = false;
+                btnRequestCode.innerHTML =
+                    '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>' +
+                    ' Obtener código de vinculación';
+            }
+            showToast(msg || 'Error obteniendo el código', 'error');
+        });
 
         // Subscription updated via webhook
         socket.on('subscription_updated', function(data) {
@@ -571,8 +514,6 @@
             qrCanvas.classList.add('qr-canvas--hidden');
             qrPlaceholder.style.display = 'flex';
             qrPlaceholder.querySelector('p').textContent = 'Bot vinculado correctamente!';
-            // Hide pairing code box after successful connection
-            if (pairingCodeBox) pairingCodeBox.style.display = 'none';
         }
         if (!connected) {
             setBotPausedState(false);
@@ -622,7 +563,7 @@
                 return;
             }
             btnStartBot.disabled = true;
-            btnStartBot.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="12" cy="12" r="10"/></svg><span><strong>Iniciando...</strong><small>Conectando a WhatsApp</small></span>';
+            btnStartBot.textContent = 'Iniciando...';
             initSocket();
             apiCall('/bot/start', { method: 'POST' }).then(function() {
                 showToast('Bot iniciado - esperando QR...');
@@ -631,9 +572,9 @@
                 btnStartBot.disabled = false;
             }).finally(function() {
                 btnStartBot.innerHTML =
-                    '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">' +
+                    '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">' +
                     '<polygon points="5 3 19 12 5 21 5 3"/>' +
-                    '</svg><span><strong>Iniciar Bot</strong><small>Conectar a WhatsApp</small></span>';
+                    '</svg> Iniciar Bot';
             });
         });
     }
@@ -672,6 +613,55 @@
         });
     }
 
+    // --- Link method tabs (QR ↔ Phone pairing) ---
+    var linkTabs   = $$('[data-link-tab]');
+    var linkViews  = $$('.link-view');
+    linkTabs.forEach(function(tab) {
+        tab.addEventListener('click', function() {
+            var target = tab.dataset.linkTab;
+            linkTabs.forEach(function(t) { t.classList.remove('link-switcher__btn--active'); });
+            tab.classList.add('link-switcher__btn--active');
+            linkViews.forEach(function(v) {
+                var show = v.id === 'link-view-' + target;
+                v.classList.toggle('link-view--hidden', !show);
+            });
+        });
+    });
+
+    // --- Pairing code (phone-based linking) ---
+    var btnRequestCode  = $('#btn-request-code');
+    var pairingCodeBox  = $('#pairing-code-box');
+    var pairingCodeDisp = $('#pairing-code-display');
+    if (btnRequestCode) {
+        btnRequestCode.addEventListener('click', function() {
+            var countryRaw = (($('#country-code-select') || {}).value || '52').replace(/[^0-9]/g, '');
+            var phoneRaw   = (($('#phone-input')         || {}).value || '').replace(/[^0-9]/g, '');
+            if (!phoneRaw) {
+                showToast('Ingresa tu número de WhatsApp', 'error');
+                return;
+            }
+            var fullPhone = countryRaw + phoneRaw;
+            if (!socket) {
+                showToast('Primero haz clic en Iniciar Bot', 'error');
+                return;
+            }
+            if (pairingCodeBox) pairingCodeBox.style.display = 'none';
+            btnRequestCode.disabled = true;
+            btnRequestCode.innerHTML = '<span class="spinner"></span> Solicitando...';
+            socket.emit('request_pairing_code', fullPhone);
+
+            // Restore button after 15 s in case server never responds
+            setTimeout(function() {
+                if (btnRequestCode.disabled) {
+                    btnRequestCode.disabled = false;
+                    btnRequestCode.innerHTML =
+                        '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>' +
+                        ' Obtener código de vinculación';
+                }
+            }, 15000);
+        });
+    }
+
     // --- Reset Bot (format devices, new QR) ---
     var btnResetBot = $('#btn-reset-bot');
     if (btnResetBot) {
@@ -703,68 +693,7 @@
                     '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">' +
                     '<path d="M23 4v6h-6"/><path d="M1 20v-6h6"/>' +
                     '<path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/>' +
-                    '</svg><span><strong>Formatear</strong><small>Generar nuevo QR</small></span>';
-            });
-        });
-    }
-
-    // --- Link Method Tabs (QR / Phone Code) ---
-    $$('.link-switcher__btn').forEach(function(tab) {
-        tab.addEventListener('click', function() {
-            var mode = tab.dataset.linkTab;
-            $$('.link-switcher__btn').forEach(function(t) { t.classList.remove('link-switcher__btn--active'); });
-            tab.classList.add('link-switcher__btn--active');
-            if (mode === 'qr') {
-                if (linkViewQR) linkViewQR.classList.remove('link-view--hidden');
-                if (linkViewPhone) linkViewPhone.classList.add('link-view--hidden');
-                if (connStepsQR) connStepsQR.classList.remove('connection-steps--hidden');
-                if (connStepsPhone) connStepsPhone.classList.add('connection-steps--hidden');
-            } else {
-                if (linkViewQR) linkViewQR.classList.add('link-view--hidden');
-                if (linkViewPhone) linkViewPhone.classList.remove('link-view--hidden');
-                if (connStepsQR) connStepsQR.classList.add('connection-steps--hidden');
-                if (connStepsPhone) connStepsPhone.classList.remove('connection-steps--hidden');
-            }
-        });
-    });
-
-    // --- Request Pairing Code ---
-    if (btnRequestCode) {
-        btnRequestCode.addEventListener('click', function() {
-            if (isPreview) {
-                showToast('Inicia el servidor para usar esta función', 'error');
-                return;
-            }
-            var dialCode = countrySelect ? countrySelect.value.replace(/-\w+$/, '') : '';
-            var localNum = (phoneInput ? phoneInput.value.trim() : '').replace(/\D/g, '');
-            var phone = dialCode + localNum;
-            if (!localNum || phone.length < 7) {
-                showToast('Selecciona un país e ingresa tu número', 'error');
-                return;
-            }
-            btnRequestCode.disabled = true;
-            btnRequestCode.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16"><circle cx="12" cy="12" r="10"/></svg> Solicitando...';
-            apiCall('/bot/request-pairing-code', {
-                method: 'POST',
-                body: JSON.stringify({ phone: phone })
-            }).then(function(data) {
-                if (data.code && pairingCodeDisplay && pairingCodeBox) {
-                    pairingCodeDisplay.textContent = data.code;
-                    pairingCodeBox.style.display = 'block';
-                    showToast('Código generado correctamente', 'success');
-                } else if (data.pending) {
-                    showToast('Bot iniciando… el código llegará en segundos', 'info');
-                } else {
-                    showToast('Código generado correctamente', 'success');
-                }
-            }).catch(function(err) {
-                showToast(err.message || 'Error al solicitar código. ¿El bot está iniciado?', 'error');
-            }).finally(function() {
-                btnRequestCode.disabled = false;
-                btnRequestCode.innerHTML =
-                    '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16">' +
-                    '<path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>' +
-                    '</svg> Obtener código de vinculación';
+                    '</svg> Formatear dispositivos (nuevo QR)';
             });
         });
     }
@@ -898,12 +827,6 @@
             div.addEventListener('click', function() { openChat(c.phone); });
             inboxList.appendChild(div);
         });
-
-        // Re-apply active class if a chat is currently open
-        if (currentChatPhone) {
-            var activeEl = $('.inbox-item[data-phone="' + currentChatPhone + '"]');
-            if (activeEl) activeEl.classList.add('inbox-item--active');
-        }
     }
 
     // --- Update a single conversation in the list when a new message arrives ---
@@ -918,8 +841,8 @@
         if (msg.senderName && msg.senderName !== 'Tú (manual)' && msg.senderName !== 'Bot') {
             conversations[key].senderName = msg.senderName;
         }
-        // Re-render inbox to reflect latest message
-        if (inboxView) {
+        // Re-render inbox if visible
+        if (inboxView && !inboxView.classList.contains('chat-view--hidden')) {
             renderInbox(inboxSearch ? inboxSearch.value.trim() : '');
         }
     }
@@ -930,28 +853,15 @@
         var convo = conversations[phone];
         if (!convo) return;
 
-        // Fill topbar
+        // Fill header
         if (chatContactName) chatContactName.textContent = convo.senderName;
         if (chatContactPhone) chatContactPhone.textContent = '+' + phone;
-
-        // Fill avatar initials
-        var avatarEl = document.getElementById('chat-contact-avatar');
-        if (avatarEl) {
-            var name = convo.senderName || phone;
-            avatarEl.textContent = name.split(' ')
-                .map(function(w) { return w[0] || ''; })
-                .join('').toUpperCase().slice(0, 2) || phone.slice(-2);
-        }
-
-        // Mark active item in list
-        $$('.inbox-item').forEach(function(el) { el.classList.remove('inbox-item--active'); });
-        var activeItem = $('.inbox-item[data-phone="' + phone + '"]');
-        if (activeItem) activeItem.classList.add('inbox-item--active');
 
         // Update pause button state
         updatePauseUI(phone);
 
-        // Show chat panel (CSS handles desktop split vs mobile stack)
+        // Switch views
+        if (inboxView) inboxView.style.display = 'none';
         if (chatView) chatView.classList.remove('chat-view--hidden');
         document.body.classList.add('chat-open');
 
@@ -966,8 +876,8 @@
     function closeChat() {
         currentChatPhone = null;
         if (chatView) chatView.classList.add('chat-view--hidden');
+        if (inboxView) inboxView.style.display = '';
         document.body.classList.remove('chat-open');
-        $$('.inbox-item').forEach(function(el) { el.classList.remove('inbox-item--active'); });
         renderInbox(inboxSearch ? inboxSearch.value.trim() : '');
     }
 
@@ -1073,18 +983,10 @@
     // ═══════════════════════════════════════════════════
 
     function loadResponseMode() {
-        // Try Firestore first (cross-device), fallback to API
-        loadResponseModeFromFirestore().then(function(fsMode) {
-            if (fsMode) {
-                currentResponseMode = fsMode;
-                updateModeUI();
-            } else {
-                apiCall('/config/response-mode').then(function(res) {
-                    currentResponseMode = res.mode || 'auto';
-                    updateModeUI();
-                }).catch(function() {});
-            }
-        });
+        apiCall('/config/response-mode').then(function(res) {
+            currentResponseMode = res.mode || 'auto';
+            updateModeUI();
+        }).catch(function() {});
     }
 
     function updateModeUI() {
@@ -1109,8 +1011,6 @@
             }).then(function(res) {
                 currentResponseMode = res.mode || newMode;
                 updateModeUI();
-                // Persist to Firestore for cross-device sync
-                saveResponseModeToFirestore(currentResponseMode);
                 showToast(currentResponseMode === 'auto' ? 'Modo automático activado' : 'Modo semi-automático activado');
             }).catch(function(err) {
                 // Revert
@@ -1406,7 +1306,7 @@
         if (payment === 'success') {
             navigateTo('plans');
             // Clean URL immediately so refresh doesn't re-trigger
-            window.history.replaceState({}, '', '/');
+            window.history.replaceState({}, '', '/dashboard');
 
             if (sessionId) {
                 // Verify the session with backend (activates subscription if not already done by webhook)
@@ -1433,7 +1333,7 @@
         } else if (payment === 'cancelled') {
             showToast('Pago cancelado.', 'error');
             navigateTo('plans');
-            window.history.replaceState({}, '', '/');
+            window.history.replaceState({}, '', '/dashboard');
         }
     }
 
@@ -1447,7 +1347,12 @@
 
             // Sign out from Firebase — WAIT for it to finish before redirecting
             try {
-                if (!firebase.apps.length) firebase.initializeApp(_FB_CONFIG);
+                var fbConfig = {
+                    apiKey: 'AIzaSyCcBN4HTgTdYLJR4VfCnAs7hlWWD-VnHb8',
+                    authDomain: 'chatbot-1d169.firebaseapp.com',
+                    projectId: 'chatbot-1d169'
+                };
+                if (!firebase.apps.length) firebase.initializeApp(fbConfig);
                 firebase.auth().signOut().then(function() {
                     window.location.href = '/';
                 }).catch(function() {
@@ -1464,33 +1369,22 @@
     var rIC = window.requestIdleCallback || function(cb) { return setTimeout(cb, 1); };
 
     function init() {
+        var draft = loadDraft();
+        if (draft) {
+            hydrateForm(draft);
+            showToast('Borrador local restaurado', 'success');
+        }
+
         if (isPreview) {
             navigateTo('connection');
             showDemoQR();
             return;
         }
 
-        // Load config: Firestore (authoritative, cross-device) → API fallback → localStorage draft
-        loadConfigFromFirestore().then(function(fsConfig) {
-            if (fsConfig) {
-                hydrateForm(fsConfig);
-                clearDraft(); // discard outdated local draft
-            } else {
-                // No Firestore data yet — try API then draft
-                apiCall('/config').then(function(res) {
-                    if (res.data) {
-                        hydrateForm(res.data);
-                        clearDraft();
-                    } else {
-                        var draft = loadDraft();
-                        if (draft) { hydrateForm(draft); showToast('Borrador local restaurado', 'success'); }
-                    }
-                }).catch(function() {
-                    var draft = loadDraft();
-                    if (draft) { hydrateForm(draft); showToast('Borrador local restaurado', 'success'); }
-                });
-            }
-        });
+        // Critical: load config + bot status first
+        apiCall('/config').then(function(res) {
+            if (res.data) hydrateForm(res.data);
+        }).catch(function() { /* use draft */ });
 
         apiCall('/bot/status').then(function(res) {
             if (res.status === 'connected') {
@@ -1561,26 +1455,16 @@
     var selectedGroups        = [];
 
     function loadMessageFilters() {
-        // Try Firestore first (cross-device), fallback to API
-        loadFiltersFromFirestore().then(function(fsFilters) {
-            var applyFilters = function(f) {
-                if (!f) return;
-                if (filterSavedContacts)   filterSavedContacts.checked   = f.replySavedContacts !== false;
-                if (filterUnsavedContacts) filterUnsavedContacts.checked = f.replyUnsavedContacts !== false;
-                if (filterGroups)          filterGroups.checked          = !!f.replyGroups;
-                selectedGroups = f.selectedGroups || [];
-                toggleGroupSelector();
-                renderGroupSelections();
-            };
-            if (fsFilters) {
-                applyFilters(fsFilters);
-            } else {
-                apiCall('/config/message-filters').then(function(res) {
-                    if (!res.ok) return;
-                    applyFilters(res.data || {});
-                }).catch(function() {});
-            }
-        });
+        apiCall('/config/message-filters').then(function(res) {
+            if (!res.ok) return;
+            var f = res.data || {};
+            if (filterSavedContacts)   filterSavedContacts.checked   = f.replySavedContacts !== false;
+            if (filterUnsavedContacts) filterUnsavedContacts.checked = f.replyUnsavedContacts !== false;
+            if (filterGroups)          filterGroups.checked          = !!f.replyGroups;
+            selectedGroups = f.selectedGroups || [];
+            toggleGroupSelector();
+            renderGroupSelections();
+        }).catch(function() {});
     }
 
     function toggleGroupSelector() {
@@ -1663,8 +1547,6 @@
                 method: 'POST',
                 body: JSON.stringify(data)
             }).then(function() {
-                // Persist to Firestore for cross-device sync
-                saveFiltersToFirestore(data);
                 showToast('Filtros guardados correctamente');
             }).catch(function(err) {
                 showToast(err.message || 'Error al guardar filtros', 'error');
@@ -1678,353 +1560,12 @@
     }
 
     // ═══════════════════════════════════════════════════
-    //  BOTLYBOT — CONFIG ASSISTANT
-    // ═══════════════════════════════════════════════════
-    (function initBotlyBot() {
-        var overlay      = $('#botlybot-overlay');
-        var btnOpen      = $('#btn-open-botlybot');
-        var btnClose     = $('#btn-close-botlybot');
-        var msgContainer = $('#botlybot-messages');
-        var inputEl      = $('#botlybot-input');
-        var sendBtn      = $('#botlybot-send');
-        var inputArea    = $('#botlybot-input-area');
-        if (!overlay || !btnOpen) return;
-
-        var bblData = {}, bblStep = 0, bblDone = false;
-
-        var steps = [
-            {
-                key: 'businessName',
-                ask: '¡Hola! Soy BotlyBot 🤖 Te voy a ayudar a configurar tu asistente personal para maximizar tus ventas.\n\n¿Cómo se llama tu negocio?',
-                placeholder: 'Ej: Pizzería Don Mario'
-            },
-            {
-                key: 'products',
-                ask: function(d) { return '¡Excelente, ' + d.businessName + '! 🎉\n\n¿Cuáles son tus productos o servicios con sus precios? Puedes escribirlos como lista:'; },
-                placeholder: 'Ej: Pizza Margarita $8, Pizza Pepperoni $9.50, Refresco $2'
-            },
-            {
-                key: 'schedule',
-                ask: '¡Perfecto! 📋 ¿Cuáles son tus horarios de atención? (días y horas específicos)',
-                placeholder: 'Ej: Lun–Vie 9am–6pm, Sábados 10am–2pm'
-            },
-            {
-                key: 'service',
-                ask: '👍 ¿Ofrecen delivery? ¿Qué métodos de pago aceptan?',
-                placeholder: 'Ej: Delivery en zona centro, aceptamos efectivo y transferencia'
-            },
-            {
-                key: 'personality',
-                ask: '🚀 ¡Casi listo! ¿Qué personalidad quieres que tenga tu bot? ¿Formal, divertido, o un vendedor muy directo?',
-                placeholder: 'Ej: Amable y divertido, con emojis, siempre intentando cerrar la venta'
-            }
-        ];
-
-        function addBubble(text, role) {
-            var wrap = document.createElement('div');
-            wrap.className = 'bbl-bubble bbl-bubble--' + role;
-            if (role === 'bot') {
-                var avatar = document.createElement('div');
-                avatar.className = 'bbl-bubble__avatar';
-                avatar.textContent = '🤖';
-                var txt = document.createElement('div');
-                txt.className = 'bbl-bubble__text';
-                txt.innerHTML = text.replace(/\n/g, '<br>');
-                wrap.appendChild(avatar);
-                wrap.appendChild(txt);
-            } else {
-                var txt2 = document.createElement('div');
-                txt2.className = 'bbl-bubble__text';
-                txt2.textContent = text;
-                wrap.appendChild(txt2);
-            }
-            msgContainer.appendChild(wrap);
-            msgContainer.scrollTop = msgContainer.scrollHeight;
-            return wrap;
-        }
-
-        function showTyping(cb) {
-            var wrap = document.createElement('div');
-            wrap.className = 'bbl-bubble bbl-bubble--bot';
-            wrap.innerHTML = '<div class="bbl-bubble__avatar">🤖</div><div class="bbl-typing"><div class="bbl-typing__dots"><span></span><span></span><span></span></div></div>';
-            msgContainer.appendChild(wrap);
-            msgContainer.scrollTop = msgContainer.scrollHeight;
-            if (sendBtn) sendBtn.disabled = true;
-            setTimeout(function() {
-                wrap.remove();
-                if (sendBtn) sendBtn.disabled = false;
-                cb();
-            }, 820);
-        }
-
-        function generateConfig(d) {
-            return '[CONFIGURACIÓN DE BOTLY - COPIA DESDE AQUÍ]\n\n' +
-                'IDENTIDAD: ' + d.businessName + '\n' +
-                'HORARIOS: ' + d.schedule + '\n' +
-                'MENÚ/PRODUCTOS:\n' + d.products + '\n\n' +
-                'POLÍTICA DE SERVICIO: ' + d.service + '\n' +
-                'TONO DE VOZ: ' + d.personality + '\n' +
-                'INSTRUCCIÓN MAESTRA: Saluda siempre con entusiasmo, prioriza cerrar la venta y si preguntan algo que no está aquí, pide amablemente que esperen a un asesor humano.\n\n' +
-                '[FIN DE LA CONFIGURACIÓN]';
-        }
-
-        function showResult() {
-            var config = generateConfig(bblData);
-            addBubble('¡Listo! Tengo toda la información. Aquí está la configuración generada para tu chatbot:', 'bot');
-
-            var resultWrap = document.createElement('div');
-            resultWrap.className = 'bbl-bubble bbl-bubble--bot';
-
-            var inner = document.createElement('div');
-            inner.style.maxWidth = '100%';
-
-            var resultBlock = document.createElement('div');
-            resultBlock.className = 'bbl-result';
-            resultBlock.textContent = config;
-
-            var actionsDiv = document.createElement('div');
-            actionsDiv.className = 'bbl-result-actions';
-
-            var copyBtn = document.createElement('button');
-            copyBtn.className = 'btn btn--primary btn--sm';
-            copyBtn.innerHTML = '📋 Copiar';
-            copyBtn.addEventListener('click', function() {
-                var fallback = function() {
-                    var ta = document.createElement('textarea');
-                    ta.value = config;
-                    ta.style.cssText = 'position:fixed;opacity:0;top:0;left:0;';
-                    document.body.appendChild(ta); ta.select();
-                    document.execCommand('copy');
-                    document.body.removeChild(ta);
-                };
-                if (navigator.clipboard) {
-                    navigator.clipboard.writeText(config).catch(fallback);
-                } else { fallback(); }
-                copyBtn.innerHTML = '✅ Copiado!';
-                setTimeout(function() { copyBtn.innerHTML = '📋 Copiar'; }, 2200);
-            });
-
-            var applyBtn = document.createElement('button');
-            applyBtn.className = 'btn btn--accent btn--sm';
-            applyBtn.innerHTML = '✨ Aplicar al formulario';
-            applyBtn.addEventListener('click', function() {
-                var nameInput   = $('#businessName');
-                var promptInput = $('#botPrompt');
-                if (nameInput)   nameInput.value   = bblData.businessName;
-                if (promptInput) promptInput.value = config;
-                overlay.classList.remove('botlybot-overlay--open');
-                showToast('✨ Configuración aplicada al formulario. No olvides guardar.');
-            });
-
-            var resetBtn = document.createElement('button');
-            resetBtn.className = 'btn btn--ghost btn--sm bbl-reset';
-            resetBtn.textContent = 'Empezar de nuevo';
-            resetBtn.addEventListener('click', resetBot);
-
-            actionsDiv.appendChild(copyBtn);
-            actionsDiv.appendChild(applyBtn);
-            actionsDiv.appendChild(resetBtn);
-            inner.appendChild(resultBlock);
-            inner.appendChild(actionsDiv);
-            resultWrap.appendChild(inner);
-            msgContainer.appendChild(resultWrap);
-            msgContainer.scrollTop = msgContainer.scrollHeight;
-
-            if (inputArea) inputArea.style.display = 'none';
-            bblDone = true;
-        }
-
-        function askStep(i) {
-            var step = steps[i];
-            var text = typeof step.ask === 'function' ? step.ask(bblData) : step.ask;
-            showTyping(function() {
-                addBubble(text, 'bot');
-                if (inputEl) { inputEl.placeholder = step.placeholder || 'Escribe tu respuesta...'; inputEl.focus(); }
-            });
-        }
-
-        function handleSend() {
-            if (bblDone) return;
-            var val = inputEl ? inputEl.value.trim() : '';
-            if (!val) return;
-            addBubble(val, 'user');
-            inputEl.value = '';
-            inputEl.style.height = '';
-            bblData[steps[bblStep].key] = val;
-            bblStep++;
-            if (bblStep < steps.length) {
-                askStep(bblStep);
-            } else {
-                showTyping(function() {
-                    addBubble('¡Listo! Tengo toda la información. Voy a mejorarla para que tu chatbot sea el mejor vendedor. 🚀', 'bot');
-                    setTimeout(showResult, 520);
-                });
-            }
-        }
-
-        function resetBot() {
-            bblData = {}; bblStep = 0; bblDone = false;
-            msgContainer.innerHTML = '';
-            if (inputArea) inputArea.style.display = '';
-            if (inputEl) { inputEl.value = ''; inputEl.placeholder = 'Escribe tu respuesta...'; }
-            askStep(0);
-        }
-
-        btnOpen.addEventListener('click', function() {
-            overlay.classList.add('botlybot-overlay--open');
-            if (!msgContainer.children.length) askStep(0);
-        });
-        btnClose.addEventListener('click', function() {
-            overlay.classList.remove('botlybot-overlay--open');
-        });
-        overlay.addEventListener('click', function(e) {
-            if (e.target === overlay) overlay.classList.remove('botlybot-overlay--open');
-        });
-        if (sendBtn) sendBtn.addEventListener('click', handleSend);
-        if (inputEl) {
-            inputEl.addEventListener('keydown', function(e) {
-                if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSend(); }
-            });
-            inputEl.addEventListener('input', function() {
-                inputEl.style.height = 'auto';
-                inputEl.style.height = Math.min(inputEl.scrollHeight, 100) + 'px';
-            });
-        }
-    })();
-
-    // ═══════════════════════════════════════════════════
-    //  TEST BOT CHAT PANEL
-    // ═══════════════════════════════════════════════════
-    (function initTestBot() {
-        var btnOpen    = $('#btn-open-testbot');
-        var panel      = $('#testbot-panel');
-        var msgWrap    = $('#testbot-messages');
-        var welcome    = $('#testbot-welcome');
-        var inputEl    = $('#testbot-input');
-        var sendBtn    = $('#testbot-send');
-        var clearBtn   = $('#btn-clear-testbot');
-        var titleEl    = $('#testbot-title');
-        if (!btnOpen || !panel) return;
-
-        var isOpen     = false;
-        var isBusy     = false;
-
-        function togglePanel() {
-            isOpen = !isOpen;
-            panel.style.display = isOpen ? 'block' : 'none';
-            btnOpen.innerHTML = isOpen
-                ? '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg> Cerrar prueba'
-                : '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg> Probar el bot';
-            if (isOpen && inputEl) {
-                // Update title with business name
-                var nameInput = $('#businessName');
-                if (titleEl && nameInput && nameInput.value.trim()) {
-                    titleEl.textContent = 'Probando: ' + nameInput.value.trim();
-                }
-                inputEl.focus();
-            }
-        }
-
-        function addBubble(text, role) {
-            if (welcome) welcome.style.display = 'none';
-            var wrap = document.createElement('div');
-            wrap.className = 'tb-bubble tb-bubble--' + role;
-
-            var lbl = document.createElement('div');
-            lbl.className = 'tb-bubble__lbl';
-            lbl.textContent = role === 'user' ? 'Tú (cliente)' : '🤖 Bot';
-
-            var txt = document.createElement('div');
-            txt.className = 'tb-bubble__text';
-            txt.textContent = text;
-
-            var col = document.createElement('div');
-            col.style.display = 'flex'; col.style.flexDirection = 'column';
-            if (role === 'user') col.style.alignItems = 'flex-end';
-            col.appendChild(lbl);
-            col.appendChild(txt);
-            wrap.appendChild(col);
-
-            msgWrap.appendChild(wrap);
-            msgWrap.scrollTop = msgWrap.scrollHeight;
-            return wrap;
-        }
-
-        function showTyping() {
-            if (welcome) welcome.style.display = 'none';
-            var wrap = document.createElement('div');
-            wrap.className = 'tb-bubble tb-bubble--bot';
-            wrap.id = 'tb-typing-indicator';
-            wrap.innerHTML = '<div class="tb-typing"><span></span><span></span><span></span></div>';
-            msgWrap.appendChild(wrap);
-            msgWrap.scrollTop = msgWrap.scrollHeight;
-        }
-
-        function removeTyping() {
-            var el = document.getElementById('tb-typing-indicator');
-            if (el) el.remove();
-        }
-
-        function clearChat() {
-            msgWrap.innerHTML = '';
-            if (welcome) {
-                msgWrap.appendChild(welcome);
-                welcome.style.display = 'flex';
-            }
-        }
-
-        function sendMessage() {
-            if (isBusy) return;
-            var text = inputEl ? inputEl.value.trim() : '';
-            if (!text) return;
-
-            inputEl.value = '';
-            inputEl.style.height = '';
-            addBubble(text, 'user');
-
-            isBusy = true;
-            if (sendBtn) sendBtn.disabled = true;
-            showTyping();
-
-            apiCall('/bot/test-message', {
-                method: 'POST',
-                body: JSON.stringify({ message: text })
-            }).then(function(res) {
-                removeTyping();
-                addBubble(res.reply || '(sin respuesta)', 'bot');
-            }).catch(function(err) {
-                removeTyping();
-                addBubble('❌ ' + (err.message || 'Error al conectar con el bot. ¿Guardaste la configuración?'), 'bot');
-            }).finally(function() {
-                isBusy = false;
-                if (sendBtn) sendBtn.disabled = false;
-                if (inputEl) inputEl.focus();
-            });
-        }
-
-        btnOpen.addEventListener('click', togglePanel);
-        if (clearBtn) clearBtn.addEventListener('click', clearChat);
-        if (sendBtn)  sendBtn.addEventListener('click', sendMessage);
-        if (inputEl) {
-            inputEl.addEventListener('keydown', function(e) {
-                if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage(); }
-            });
-            inputEl.addEventListener('input', function() {
-                inputEl.style.height = 'auto';
-                inputEl.style.height = Math.min(inputEl.scrollHeight, 100) + 'px';
-            });
-        }
-    })();
-
-    // ═══════════════════════════════════════════════════
     //  SCHEDULED / RECURRING MESSAGES
     // ═══════════════════════════════════════════════════
     var schedGroupSelect  = $('#sched-group-select');
     var schedIntervalVal  = $('#sched-interval-value');
     var schedIntervalUnit = $('#sched-interval-unit');
     var schedMessage      = $('#sched-message');
-    var schedStartHour    = $('#sched-start-hour');
-    var schedEndHour      = $('#sched-end-hour');
     var btnAddScheduled   = $('#btn-add-scheduled');
     var scheduledList     = $('#scheduled-list');
     var scheduledEmpty    = $('#scheduled-empty');
@@ -2065,26 +1606,7 @@
 
         var unitLabels = { minutes: 'min', hours: 'hrs', days: 'días' };
 
-        // Collect groups from the add-form select to reuse in edit selects
-        var groupOptions = schedGroupSelect
-            ? Array.from(schedGroupSelect.options).slice(1).map(function(o) {
-                return { id: o.value, name: o.textContent };
-              })
-            : [];
-
         scheduledItems.forEach(function(item, idx) {
-            var timeWindow = '';
-            if (item.timeWindowStart && item.timeWindowEnd) {
-                timeWindow = ' · 🕐 ' + item.timeWindowStart + ' – ' + item.timeWindowEnd;
-            }
-
-            var groupSelectHtml = '<select class="form__input sched-edit__group">'
-                + '<option value="">— Selecciona un grupo —</option>'
-                + groupOptions.map(function(g) {
-                    return '<option value="' + escapeHtml(g.id) + '"' + (g.id === item.groupId ? ' selected' : '') + '>' + escapeHtml(g.name) + '</option>';
-                }).join('')
-                + '</select>';
-
             var div = document.createElement('div');
             div.className = 'scheduled-item';
             div.innerHTML =
@@ -2098,53 +1620,13 @@
                     '<span class="scheduled-item__meta">' +
                         (item.enabled ? '✅ Activo' : '⏸ Pausado') +
                         (item.lastSent ? ' · Último envío: ' + formatTime(item.lastSent) : ' · Aún no enviado') +
-                        timeWindow +
                     '</span>' +
-                    /* inline edit form (hidden by default) */
-                    '<div class="sched-edit" style="display:none;">' +
-                        '<div class="scheduled-form__row">' +
-                            '<div class="scheduled-form__field">' +
-                                '<label>Grupo</label>' +
-                                groupSelectHtml +
-                            '</div>' +
-                            '<div class="scheduled-form__field scheduled-form__field--interval">' +
-                                '<label>Enviar cada</label>' +
-                                '<div class="scheduled-form__interval">' +
-                                    '<input type="number" class="form__input sched-edit__interval-val" min="1" max="999" value="' + item.intervalValue + '" style="width:70px;">' +
-                                    '<select class="form__input sched-edit__interval-unit">' +
-                                        '<option value="minutes"' + (item.intervalUnit === 'minutes' ? ' selected' : '') + '>Minutos</option>' +
-                                        '<option value="hours"'   + (item.intervalUnit === 'hours'   ? ' selected' : '') + '>Horas</option>' +
-                                        '<option value="days"'    + (item.intervalUnit === 'days'    ? ' selected' : '') + '>Días</option>' +
-                                    '</select>' +
-                                '</div>' +
-                            '</div>' +
-                        '</div>' +
-                        '<div class="scheduled-form__field">' +
-                            '<label>Mensaje</label>' +
-                            '<textarea class="form__input sched-edit__message" rows="3">' + escapeHtml(item.message) + '</textarea>' +
-                        '</div>' +
-                        '<div class="scheduled-form__row">' +
-                            '<div class="scheduled-form__field">' +
-                                '<label>Hora de inicio</label>' +
-                                '<input type="time" class="form__input sched-edit__start" value="' + (item.timeWindowStart || '00:00') + '">' +
-                            '</div>' +
-                            '<div class="scheduled-form__field">' +
-                                '<label>Hora de fin</label>' +
-                                '<input type="time" class="form__input sched-edit__end" value="' + (item.timeWindowEnd || '23:59') + '">' +
-                            '</div>' +
-                        '</div>' +
-                        '<div class="sched-edit__actions">' +
-                            '<button class="btn btn--primary btn--sm sched-edit__save" data-sched-idx="' + idx + '">Guardar</button>' +
-                            '<button class="btn btn--ghost btn--sm sched-edit__cancel">Cancelar</button>' +
-                        '</div>' +
-                    '</div>' +
                 '</div>' +
                 '<div class="scheduled-item__actions">' +
                     '<label class="toggle scheduled-item__toggle">' +
                         '<input type="checkbox" data-sched-idx="' + idx + '" class="sched-toggle" ' + (item.enabled ? 'checked' : '') + '>' +
                         '<span class="toggle__slider"></span>' +
                     '</label>' +
-                    '<button class="btn btn--ghost btn--sm scheduled-item__edit" data-sched-idx="' + idx + '">Editar</button>' +
                     '<button class="btn btn--ghost btn--sm scheduled-item__delete" data-sched-idx="' + idx + '">Eliminar</button>' +
                 '</div>';
             scheduledList.appendChild(div);
@@ -2156,67 +1638,6 @@
                 var idx = parseInt(toggle.dataset.schedIdx);
                 scheduledItems[idx].enabled = toggle.checked;
                 saveScheduledMessages();
-            });
-        });
-
-        // Bind edit button — show/hide inline form
-        scheduledList.querySelectorAll('.scheduled-item__edit').forEach(function(btn) {
-            btn.addEventListener('click', function() {
-                var idx = parseInt(btn.dataset.schedIdx);
-                var item = btn.closest('.scheduled-item');
-                var editPanel = item.querySelector('.sched-edit');
-                var isOpen = editPanel.style.display !== 'none';
-                editPanel.style.display = isOpen ? 'none' : 'block';
-                btn.textContent = isOpen ? 'Editar' : 'Cancelar';
-            });
-        });
-
-        // Bind save-edit buttons
-        scheduledList.querySelectorAll('.sched-edit__save').forEach(function(btn) {
-            btn.addEventListener('click', function() {
-                var idx = parseInt(btn.dataset.schedIdx);
-                var item = btn.closest('.scheduled-item');
-                var groupSel  = item.querySelector('.sched-edit__group');
-                var intVal    = item.querySelector('.sched-edit__interval-val');
-                var intUnit   = item.querySelector('.sched-edit__interval-unit');
-                var msgArea   = item.querySelector('.sched-edit__message');
-                var startInp  = item.querySelector('.sched-edit__start');
-                var endInp    = item.querySelector('.sched-edit__end');
-
-                var newGroupId    = groupSel ? groupSel.value : scheduledItems[idx].groupId;
-                var newGroupName  = groupSel ? groupSel.options[groupSel.selectedIndex].text : scheduledItems[idx].groupName;
-                var newInterval   = intVal ? parseInt(intVal.value) : scheduledItems[idx].intervalValue;
-                var newUnit       = intUnit ? intUnit.value : scheduledItems[idx].intervalUnit;
-                var newMessage    = msgArea ? msgArea.value.trim() : scheduledItems[idx].message;
-                var newStart      = startInp ? startInp.value : scheduledItems[idx].timeWindowStart;
-                var newEnd        = endInp ? endInp.value : scheduledItems[idx].timeWindowEnd;
-
-                if (!newGroupId) { showToast('Selecciona un grupo', 'error'); return; }
-                if (!newMessage) { showToast('Escribe un mensaje', 'error'); return; }
-                if (newInterval < 1) { showToast('El intervalo debe ser al menos 1', 'error'); return; }
-
-                scheduledItems[idx].groupId        = newGroupId;
-                scheduledItems[idx].groupName      = newGroupName;
-                scheduledItems[idx].intervalValue  = newInterval;
-                scheduledItems[idx].intervalUnit   = newUnit;
-                scheduledItems[idx].message        = newMessage;
-                scheduledItems[idx].timeWindowStart = newStart;
-                scheduledItems[idx].timeWindowEnd   = newEnd;
-
-                saveScheduledMessages();
-                renderScheduledList();
-                showToast('Mensaje programado actualizado');
-            });
-        });
-
-        // Bind cancel-edit buttons
-        scheduledList.querySelectorAll('.sched-edit__cancel').forEach(function(btn) {
-            btn.addEventListener('click', function() {
-                var item = btn.closest('.scheduled-item');
-                var editPanel = item.querySelector('.sched-edit');
-                var editBtn = item.querySelector('.scheduled-item__edit');
-                editPanel.style.display = 'none';
-                if (editBtn) editBtn.textContent = 'Editar';
             });
         });
 
@@ -2250,8 +1671,6 @@
             var intervalValue = schedIntervalVal ? parseInt(schedIntervalVal.value) : 1;
             var intervalUnit = schedIntervalUnit ? schedIntervalUnit.value : 'hours';
             var message = schedMessage ? schedMessage.value.trim() : '';
-            var timeWindowStart = schedStartHour ? schedStartHour.value : '00:00';
-            var timeWindowEnd   = schedEndHour   ? schedEndHour.value   : '23:59';
 
             if (!groupId) { showToast('Selecciona un grupo', 'error'); return; }
             if (!message) { showToast('Escribe un mensaje', 'error'); return; }
@@ -2264,8 +1683,6 @@
                 intervalValue: intervalValue,
                 intervalUnit: intervalUnit,
                 message: message,
-                timeWindowStart: timeWindowStart,
-                timeWindowEnd: timeWindowEnd,
                 enabled: true,
                 lastSent: null,
                 createdAt: new Date().toISOString()
@@ -2279,8 +1696,6 @@
             if (schedIntervalVal) schedIntervalVal.value = '1';
             if (schedIntervalUnit) schedIntervalUnit.value = 'hours';
             if (schedMessage) schedMessage.value = '';
-            if (schedStartHour) schedStartHour.value = '08:00';
-            if (schedEndHour)   schedEndHour.value   = '21:00';
 
             showToast('Mensaje programado agregado');
         });
@@ -2406,7 +1821,12 @@
                 localStorage.removeItem('botsaas_user');
                 if (socket) socket.disconnect();
                 try {
-                    if (!firebase.apps.length) firebase.initializeApp(_FB_CONFIG);
+                    var fbConfig = {
+                        apiKey: 'AIzaSyCcBN4HTgTdYLJR4VfCnAs7hlWWD-VnHb8',
+                        authDomain: 'chatbot-1d169.firebaseapp.com',
+                        projectId: 'chatbot-1d169'
+                    };
+                    if (!firebase.apps.length) firebase.initializeApp(fbConfig);
                     firebase.auth().signOut().then(function() {
                         window.location.href = '/';
                     }).catch(function() {

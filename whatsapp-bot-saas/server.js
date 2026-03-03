@@ -56,6 +56,91 @@ admin.initializeApp({
 });
 const db = admin.firestore();
 
+// ─── Firestore-based Baileys auth state (replaces useMultiFileAuthState) ─────
+// Stores each user's WhatsApp session in Firestore so it survives Railway
+// restarts (which wipe the ephemeral filesystem).
+async function useFirestoreAuthState(uid) {
+    const { proto, initAuthCreds, BufferJSON } = require('@whiskeysockets/baileys');
+    const sessionRef  = db.collection('baileys_sessions').doc(uid);
+    const credsRef    = sessionRef.collection('data').doc('creds');
+    const keysRef     = sessionRef.collection('keys');
+
+    const readData = async (docRef) => {
+        try {
+            const snap = await docRef.get();
+            if (!snap.exists) return null;
+            return JSON.parse(JSON.stringify(snap.data()), BufferJSON.reviver);
+        } catch (e) { return null; }
+    };
+
+    const writeData = async (docRef, data) => {
+        await docRef.set(JSON.parse(JSON.stringify(data, BufferJSON.replacer)));
+    };
+
+    const creds = (await readData(credsRef)) || initAuthCreds();
+
+    return {
+        state: {
+            creds,
+            keys: {
+                get: async (type, ids) => {
+                    const data = {};
+                    await Promise.all(ids.map(async (id) => {
+                        const docRef = keysRef.doc(`${type}-${id}`);
+                        let value = await readData(docRef);
+                        if (type === 'app-state-sync-key' && value) {
+                            value = proto.Message.AppStateSyncKeyData.fromObject(value);
+                        }
+                        data[id] = value;
+                    }));
+                    return data;
+                },
+                set: async (data) => {
+                    const batch = db.batch();
+                    for (const category in data) {
+                        for (const id in data[category]) {
+                            const docRef = keysRef.doc(`${category}-${id}`);
+                            const value  = data[category][id];
+                            if (value) {
+                                batch.set(docRef, JSON.parse(JSON.stringify(value, BufferJSON.replacer)));
+                            } else {
+                                batch.delete(docRef);
+                            }
+                        }
+                    }
+                    await batch.commit();
+                }
+            }
+        },
+        saveCreds: async () => { await writeData(credsRef, creds); }
+    };
+}
+
+async function clearFirestoreAuthState(uid) {
+    try {
+        const sessionRef = db.collection('baileys_sessions').doc(uid);
+        const [dataDocs, keysDocs] = await Promise.all([
+            sessionRef.collection('data').listDocuments(),
+            sessionRef.collection('keys').listDocuments()
+        ]);
+        const batch = db.batch();
+        [...dataDocs, ...keysDocs].forEach(d => batch.delete(d));
+        batch.delete(sessionRef);
+        await batch.commit();
+        console.log(`[Auth] Firestore session cleared for ${uid}`);
+    } catch (e) {
+        console.error(`[Auth] Error clearing Firestore session for ${uid}:`, e.message);
+    }
+}
+
+async function firestoreSessionExists(uid) {
+    try {
+        const snap = await db.collection('baileys_sessions').doc(uid)
+            .collection('data').doc('creds').get();
+        return snap.exists;
+    } catch { return false; }
+}
+
 // ─── Stripe ─────────────────────────────────────────────
 const STRIPE_SECRET_KEY  = process.env.STRIPE_SECRET_KEY  || '';
 const STRIPE_WEBHOOK_SECRET = process.env.STRIPE_WEBHOOK_SECRET || '';
@@ -194,9 +279,9 @@ app.use(express.static(path.join(__dirname, 'src', 'public'), {
         else if (filePath.endsWith('sw.js')) {
             res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
         }
-        // CSS/JS: cache 1 day with revalidation
+        // CSS/JS: always revalidate (ETag/Last-Modified let browser use 304)
         else if (filePath.endsWith('.css') || filePath.endsWith('.js')) {
-            res.setHeader('Cache-Control', 'public, max-age=86400, must-revalidate');
+            res.setHeader('Cache-Control', 'public, max-age=0, must-revalidate');
         }
         // Images: cache 30 days
         else if (/\.(png|jpg|jpeg|gif|svg|webp|ico)$/i.test(filePath)) {
@@ -432,57 +517,6 @@ app.post('/api/bot/stop', authMiddleware, async (req, res) => {
     res.json({ ok: true, message: 'Bot detenido.' });
 });
 
-// Request pairing code — alternative to QR for mobile linking
-app.post('/api/bot/request-pairing-code', authMiddleware, async (req, res) => {
-    const { phone } = req.body;
-    if (!phone) return res.status(400).json({ error: 'Se requiere el número de teléfono.' });
-
-    const cleanPhone = phone.replace(/\D/g, '');
-    if (cleanPhone.length < 7) return res.status(400).json({ error: 'Número de teléfono inválido.' });
-
-    const uid = req.uid;
-    const bot = userBots.get(uid);
-
-    // If bot is already fully connected, nothing to do
-    if (bot && bot.status === 'connected') {
-        return res.status(400).json({ error: 'El bot ya está conectado.' });
-    }
-
-    // If bot has a live socket (in QR/starting state), call requestPairingCode directly
-    if (bot && bot.sock) {
-        try {
-            const code = await bot.sock.requestPairingCode(cleanPhone);
-            console.log(`[Bot][${req.email}] 📱 Pairing code requested: ${code}`);
-            const room = `user_${uid}`;
-            io.to(room).emit('pairing_code', code);
-            return res.json({ ok: true, code });
-        } catch (e) {
-            console.error(`[Bot][${req.email}] Pairing code error:`, e.message);
-            return res.status(500).json({ error: e.message || 'Error al solicitar código de vinculación.' });
-        }
-    }
-
-    // Bot not started — check subscription then start in pairing mode
-    const isAdmin = FREE_PASS_EMAILS.includes(req.email);
-    if (!isAdmin) {
-        const config = await loadUserConfig(uid);
-        const sub = config.subscription;
-        if (!sub || !sub.expiresAt || new Date(sub.expiresAt) <= new Date()) {
-            const reason = sub?.isTrial ? 'trial_expired' : (!sub ? 'no_subscription' : 'expired');
-            return res.status(403).json({
-                error: reason === 'trial_expired'
-                    ? 'Tu prueba gratuita ha expirado. Suscríbete para seguir usando Botly.'
-                    : 'Se requiere una suscripción activa para iniciar el bot.',
-                reason
-            });
-        }
-    }
-
-    await saveUserConfig(uid, { botActive: true, botEmail: req.email });
-    startBot(uid, req.email, 0, cleanPhone);
-    return res.json({ ok: true, pending: true, message: 'Bot iniciando, el código llegará en segundos vía socket.' });
-});
-
 // Pause bot globally — keeps WhatsApp connection alive, stops responding to messages
 app.post('/api/bot/pause', authMiddleware, async (req, res) => {
     const bot = userBots.get(req.uid);
@@ -519,16 +553,8 @@ app.post('/api/bot/reset', authMiddleware, async (req, res) => {
     // 1. Stop the running bot if any
     await stopBot(uid);
 
-    // 2. Delete the local auth data for this user so a fresh QR is generated
-    const authDir = path.join(__dirname, '.baileys_auth', uid);
-    try {
-        if (fs.existsSync(authDir)) {
-            fs.rmSync(authDir, { recursive: true, force: true });
-            console.log(`[Bot] Auth data removed for ${uid}`);
-        }
-    } catch (e) {
-        console.error(`[Bot] Error removing auth data:`, e.message);
-    }
+    // 2. Delete Firestore auth data for this user so a fresh QR is generated
+    await clearFirestoreAuthState(uid);
 
     // 3. Keep bot-active flag on (reset ≠ stop, user wants to reconnect)
     await saveUserConfig(uid, { botActive: true, botEmail: req.email });
@@ -1159,23 +1185,6 @@ app.post('/api/config/scheduled-messages', authMiddleware, async (req, res) => {
     res.json({ ok: true, data: messages });
 });
 
-// ─── Bot Test Chat ───────────────────────────────────────
-app.post('/api/bot/test-message', authMiddleware, async (req, res) => {
-    const { message } = req.body;
-    if (!message || typeof message !== 'string') {
-        return res.status(400).json({ error: 'Se requiere un mensaje.' });
-    }
-    try {
-        const config = await loadUserConfig(req.uid);
-        const testChatId = `test::${req.uid}`;
-        const reply = await getAIResponse(req.uid, testChatId, message.trim(), 'Cliente', config);
-        res.json({ ok: true, reply });
-    } catch (e) {
-        console.error(`[TestBot] Error for ${req.email}:`, e.message);
-        res.status(500).json({ error: e.message || 'Error al generar respuesta.' });
-    }
-});
-
 // ─── Scheduled Messages Timer System ───
 const scheduledTimers = new Map(); // uid -> intervalId[]
 
@@ -1212,21 +1221,6 @@ function restartScheduledTimers(uid) {
                     if (!currentBot || currentBot.status !== 'connected' || !currentBot.sock) {
                         return;
                     }
-
-                    // Enforce time window (timeWindowStart / timeWindowEnd are "HH:MM" strings)
-                    if (msg.timeWindowStart && msg.timeWindowEnd) {
-                        const now = new Date();
-                        const currentMinutes = now.getHours() * 60 + now.getMinutes();
-                        const [sh, sm] = msg.timeWindowStart.split(':').map(Number);
-                        const [eh, em] = msg.timeWindowEnd.split(':').map(Number);
-                        const startMinutes = sh * 60 + sm;
-                        const endMinutes   = eh * 60 + em;
-                        if (currentMinutes < startMinutes || currentMinutes > endMinutes) {
-                            console.log(`[Scheduled] Skipping "${msg.groupName || msg.groupId}" — outside time window (${msg.timeWindowStart}–${msg.timeWindowEnd})`);
-                            return;
-                        }
-                    }
-
                     const jid = msg.groupId.includes('@') ? msg.groupId : msg.groupId;
                     await currentBot.sock.sendMessage(jid, { text: msg.message });
 
@@ -1361,8 +1355,8 @@ app.post('/api/stripe/checkout', authMiddleware, async (req, res) => {
                 email: req.email
             },
             customer_email: req.email,
-            success_url: `${req.protocol}://${req.get('host')}/?payment=success&plan=${planId}&session_id={CHECKOUT_SESSION_ID}`,
-            cancel_url:  `${req.protocol}://${req.get('host')}/?payment=cancelled`
+            success_url: `${req.protocol}://${req.get('host')}/dashboard?payment=success&plan=${planId}&session_id={CHECKOUT_SESSION_ID}`,
+            cancel_url:  `${req.protocol}://${req.get('host')}/dashboard?payment=cancelled`
         });
         console.log(`[Stripe] Checkout created for ${req.email}: ${planId} → ${session.id}`);
         res.json({ ok: true, url: session.url });
@@ -1785,6 +1779,34 @@ io.on('connection', async (socket) => {
         socket.on('disconnect', () => {
             console.log(`[Socket] ${decoded.email} left room ${room}`);
         });
+
+        // ─── Pairing code (phone-based linking instead of QR) ───
+        socket.on('request_pairing_code', async (phoneNumber) => {
+            const bot = userBots.get(uid);
+            if (!bot || !bot.sock) {
+                socket.emit('pairing_code_error', 'Primero inicia el bot y espera unos segundos.');
+                return;
+            }
+            if (bot.status === 'connected') {
+                socket.emit('pairing_code_error', 'El bot ya está conectado a WhatsApp.');
+                return;
+            }
+            try {
+                const clean = String(phoneNumber).replace(/[^0-9]/g, '');
+                if (!clean || clean.length < 8) {
+                    socket.emit('pairing_code_error', 'Número inválido. Incluye el código de país (ej: 529841234567).');
+                    return;
+                }
+                console.log(`[Bot] requestPairingCode for ${decoded.email} → ${clean}`);
+                const code = await bot.sock.requestPairingCode(clean);
+                socket.emit('pairing_code', code);
+                console.log(`[Bot] Pairing code sent to ${decoded.email}: ${code}`);
+            } catch (err) {
+                console.error(`[Bot] requestPairingCode error:`, err.message);
+                socket.emit('pairing_code_error', 'No se pudo generar el código. Asegúrate de haber iniciado el bot primero y que el número sea correcto.');
+            }
+        });
+
     } catch {
         socket.disconnect(true);
     }
@@ -1806,9 +1828,9 @@ function dedup(id) {
 // Baileys logger (silent by default, set BAILEYS_DEBUG=true for verbose)
 const baileysLogger = pino({ level: process.env.BAILEYS_DEBUG ? 'debug' : 'silent' });
 
-async function startBot(uid, email, _retryCount = 0, pairingPhone = null) {
+async function startBot(uid, email, _retryCount = 0) {
     const room = `user_${uid}`;
-    console.log(`\n[Bot] Starting for ${email} (${uid})${pairingPhone ? ' [pairing mode]' : ''}`);
+    console.log(`\n[Bot] Starting for ${email} (${uid})`);
 
     // If there's already a running bot, clean it up first
     const existing = userBots.get(uid);
@@ -1833,10 +1855,8 @@ async function startBot(uid, email, _retryCount = 0, pairingPhone = null) {
     };
     userBots.set(uid, botState);
 
-    // Auth state stored per user in .baileys_auth/<uid>/
-    const authDir = path.join(__dirname, '.baileys_auth', uid);
-    if (!fs.existsSync(authDir)) fs.mkdirSync(authDir, { recursive: true });
-    const { state, saveCreds } = await useMultiFileAuthState(authDir);
+    // Auth state stored in Firestore — survives Railway container restarts
+    const { state, saveCreds } = await useFirestoreAuthState(uid);
 
     // Fetch latest WA version — fallback to known-good if network call fails
     let version = [2, 3000, 1023654440];
@@ -1868,21 +1888,6 @@ async function startBot(uid, email, _retryCount = 0, pairingPhone = null) {
     });
 
     botState.sock = sock;
-
-    // If started in pairing-code mode, request the code once socket is ready
-    if (pairingPhone) {
-        setTimeout(async () => {
-            try {
-                const cleanPhone = String(pairingPhone).replace(/\D/g, '');
-                const code = await sock.requestPairingCode(cleanPhone);
-                console.log(`[Bot][${email}] 📱 Pairing code: ${code}`);
-                io.to(room).emit('pairing_code', code);
-            } catch (e) {
-                console.error(`[Bot][${email}] Pairing code error:`, e.message);
-                io.to(room).emit('pairing_code_error', e.message);
-            }
-        }, 1500);
-    }
 
     // Swallow raw WS errors so they don't crash the process
     try { if (sock.ws && typeof sock.ws.on === 'function') sock.ws.on('error', function(err){ console.error('[Bot] WS error for ' + email + ':', err.message); }); } catch {}
@@ -1945,11 +1950,8 @@ async function startBot(uid, email, _retryCount = 0, pairingPhone = null) {
                 botState.lastQR = null;
 
                 if (statusCode === DisconnectReason.loggedOut) {
-                    // Clear auth so next start gets a fresh QR
-                    try {
-                        fs.rmSync(authDir, { recursive: true, force: true });
-                        console.log(`[Bot] Auth cleared for ${email} (logged out)`);
-                    } catch { /* ignore */ }
+                    // Clear Firestore auth so next start gets a fresh QR
+                    await clearFirestoreAuthState(uid);
                     // User logged out from phone — clear persistent flag
                     saveUserConfig(uid, { botActive: false }).catch(() => {});
                 }
@@ -2256,10 +2258,10 @@ async function autoStartBots() {
             const data = doc.data();
             const email = data.botEmail || data.email || 'unknown';
 
-            // Only auto-start if the user has saved Baileys auth (already paired)
-            const authDir = path.join(__dirname, '.baileys_auth', uid);
-            if (!fs.existsSync(authDir)) {
-                console.log(`[AutoStart] Skipping ${email} (${uid}) — no auth session on disk`);
+            // Only auto-start if the user has a saved Baileys session in Firestore
+            const hasSession = await firestoreSessionExists(uid);
+            if (!hasSession) {
+                console.log(`[AutoStart] Skipping ${email} (${uid}) — no auth session in Firestore`);
                 // Clear stale flag
                 saveUserConfig(uid, { botActive: false }).catch(() => {});
                 continue;

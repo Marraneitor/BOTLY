@@ -2,7 +2,7 @@
    Botly — Service Worker (PWA)
    Cache-first for static assets, network-first for API
    ============================================================ */
-const CACHE_NAME = 'botly-v3';
+const CACHE_NAME = 'botly-v8';
 const STATIC_ASSETS = [
     '/',
     '/index.html',
@@ -37,34 +37,55 @@ self.addEventListener('activate', (e) => {
     );
 });
 
-// Fetch: network-first for API, cache-first for static
+// Fetch strategy:
+//  - API / socket.io  → bypass SW entirely (network only)
+//  - HTML / JS / CSS  → network-first (always fresh, fallback to cache)
+//  - Images / fonts   → cache-first  (rarely change)
 self.addEventListener('fetch', (e) => {
     const url = new URL(e.request.url);
 
     // Skip non-GET requests
     if (e.request.method !== 'GET') return;
 
-    // Network-first for API calls & socket.io
+    // Bypass: API & socket.io
     if (url.pathname.startsWith('/api') || url.pathname.startsWith('/socket.io')) {
         return;
     }
 
-    // Cache-first for static assets
-    e.respondWith(
-        caches.match(e.request).then((cached) => {
-            if (cached) return cached;
-            return fetch(e.request).then((response) => {
+    const ext = url.pathname.split('.').pop().toLowerCase();
+    const isDocument = e.request.destination === 'document';
+    const isCodeAsset = isDocument || ext === 'js' || ext === 'css';
+
+    if (isCodeAsset) {
+        // Network-first: always try to get the latest version
+        e.respondWith(
+            fetch(e.request).then((response) => {
                 if (response.ok && response.type === 'basic') {
                     const clone = response.clone();
                     caches.open(CACHE_NAME).then((cache) => cache.put(e.request, clone));
                 }
                 return response;
-            });
-        }).catch(() => {
-            // Offline fallback
-            if (e.request.destination === 'document') {
-                return caches.match('/index.html');
-            }
-        })
-    );
+            }).catch(() => {
+                // Offline fallback: serve from cache
+                return caches.match(e.request).then((cached) => {
+                    if (cached) return cached;
+                    if (isDocument) return caches.match('/index.html');
+                });
+            })
+        );
+    } else {
+        // Cache-first for images / fonts (rarely change)
+        e.respondWith(
+            caches.match(e.request).then((cached) => {
+                if (cached) return cached;
+                return fetch(e.request).then((response) => {
+                    if (response.ok && response.type === 'basic') {
+                        const clone = response.clone();
+                        caches.open(CACHE_NAME).then((cache) => cache.put(e.request, clone));
+                    }
+                    return response;
+                });
+            })
+        );
+    }
 });
