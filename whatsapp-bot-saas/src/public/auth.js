@@ -213,6 +213,62 @@
     document.getElementById('btn-google-login').addEventListener('click', signInWithGoogle);
     document.getElementById('btn-google-register').addEventListener('click', signInWithGoogle);
 
+    // ─── Forgot Password ───────────────────────────────────────
+    const fpOverlay   = document.getElementById('fp-overlay');
+    const fpStepInput = document.getElementById('fp-step-input');
+    const fpStepOk    = document.getElementById('fp-step-success');
+    const fpEmailEl   = document.getElementById('fp-email');
+    const fpError     = document.getElementById('fp-error');
+
+    function openFP() {
+        fpOverlay.setAttribute('aria-hidden', 'false');
+        fpOverlay.classList.add('fp-overlay--visible');
+        fpStepInput.style.display = 'block';
+        fpStepOk.style.display    = 'none';
+        fpError.textContent = '';
+        fpEmailEl.value = document.getElementById('login-email').value || '';
+        setTimeout(() => fpEmailEl.focus(), 120);
+    }
+
+    function closeFP() {
+        fpOverlay.classList.remove('fp-overlay--visible');
+        fpOverlay.setAttribute('aria-hidden', 'true');
+    }
+
+    document.getElementById('show-forgot').addEventListener('click', (e) => { e.preventDefault(); openFP(); });
+    document.getElementById('fp-close').addEventListener('click', closeFP);
+    document.getElementById('fp-cancel').addEventListener('click', closeFP);
+    document.getElementById('fp-done').addEventListener('click', closeFP);
+    fpOverlay.addEventListener('click', (e) => { if (e.target === fpOverlay) closeFP(); });
+    document.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeFP(); });
+
+    document.getElementById('fp-send').addEventListener('click', async () => {
+        const email = fpEmailEl.value.trim();
+        fpError.textContent = '';
+        if (!email) { fpError.textContent = 'Escribe tu correo electrónico.'; return; }
+
+        const btn = document.getElementById('fp-send');
+        btn.disabled = true;
+        btn.textContent = 'Enviando...';
+
+        try {
+            await auth.sendPasswordResetEmail(email);
+            document.getElementById('fp-sent-to').textContent = 'Enviado a: ' + email;
+            fpStepInput.style.display = 'none';
+            fpStepOk.style.display    = 'block';
+        } catch (err) {
+            fpError.textContent = translateError(err.code);
+        } finally {
+            btn.disabled = false;
+            btn.textContent = 'Enviar enlace de recuperación';
+        }
+    });
+
+    // Allow Enter key in email field
+    fpEmailEl.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') document.getElementById('fp-send').click();
+    });
+
     // ─── Auto-switch to register if hash is #register ────────
     if (window.location.hash === '#register' || window.location.hash === '#registro') {
         loginCard.classList.add('auth-card--hidden');
