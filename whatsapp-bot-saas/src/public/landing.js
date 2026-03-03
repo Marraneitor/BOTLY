@@ -159,6 +159,20 @@
         }
     }
 
+    // ─── FAQ: expand / collapse all ─────────────────────
+    var faqExpandBtn = document.getElementById('faq-expand-all');
+    if (faqExpandBtn) {
+        faqExpandBtn.addEventListener('click', function() {
+            var items = document.querySelectorAll('.faq-item');
+            var allOpen = Array.prototype.every.call(items, function(d) { return d.open; });
+            items.forEach(function(d) { d.open = !allOpen; });
+            faqExpandBtn.classList.toggle('expanded', !allOpen);
+            faqExpandBtn.innerHTML = (!allOpen
+                ? '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14"><polyline points="6 9 12 15 18 9"/></svg> Colapsar todo'
+                : '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14"><polyline points="6 9 12 15 18 9"/></svg> Expandir todo');
+        });
+    }
+
     // ─── Smooth scroll for anchor links ──────────────────
     var anchorLinks = document.querySelectorAll('a[href^="#"]');
     for (var j = 0; j < anchorLinks.length; j++) {
