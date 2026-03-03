@@ -31,7 +31,7 @@
     <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js" defer></script>
     <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js" defer></script>
     <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js" defer></script>
-    <script src="./client.js?v=8" defer></script>
+    <script src="./client.js?v=9" defer></script>
     <script>if('serviceWorker' in navigator){window.addEventListener('load',()=>{navigator.serviceWorker.register('/sw.js').catch(()=>{});});}</script>
 </head>
 <body>
@@ -1189,7 +1189,7 @@
 
     <!-- ========== TRIAL BANNER (floating) ========== -->
     <div class="trial-banner" id="trial-banner" style="display:none;">
-        <span id="trial-banner-text">🎁 Prueba gratuita: te quedan <strong id="trial-hours-left">24</strong> horas</span>
+        <span id="trial-banner-text">🎁 Prueba gratuita: te quedan <strong id="trial-time-left">7</strong> días</span>
         <button class="btn btn--sm btn--primary" onclick="document.querySelector('[data-section=plans]').click();">Ver planes</button>
     </div>
 

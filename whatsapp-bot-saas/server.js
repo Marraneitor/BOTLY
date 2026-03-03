@@ -406,7 +406,7 @@ async function saveUserConfig(uid, data) {
 // ══════════════════════════════════════════════════════════
 
 // Save user profile after registration (optional extra data)
-// Also grants a 1-day free trial for NEW users.
+// Also grants a 7-day free trial for NEW users.
 app.post('/api/auth/profile', authMiddleware, async (req, res) => {
     const { name, businessName } = req.body;
 
@@ -421,16 +421,16 @@ app.post('/api/auth/profile', authMiddleware, async (req, res) => {
         createdAt: existing.createdAt || new Date().toISOString()
     };
 
-    // Grant 1-day trial ONLY to brand-new users who have no subscription
+    // Grant 7-day trial ONLY to brand-new users who have no subscription
     if (isNewUser && !existing.subscription) {
         const now = new Date();
         const trialExpiry = new Date(now);
-        trialExpiry.setDate(trialExpiry.getDate() + 1); // +1 day
+        trialExpiry.setDate(trialExpiry.getDate() + 7); // +7 days
 
         profileData.subscription = {
             active: true,
             planId: 'trial',
-            planName: 'Prueba gratuita (1 día)',
+            planName: 'Prueba gratuita (7 días)',
             paidAt: now.toISOString(),
             expiresAt: trialExpiry.toISOString(),
             stripeSessionId: null,
@@ -438,7 +438,7 @@ app.post('/api/auth/profile', authMiddleware, async (req, res) => {
             totalMonths: 0,
             isTrial: true
         };
-        console.log(`[Auth] 🎁 1-day trial granted to ${req.email} (expires ${trialExpiry.toISOString()})`);
+        console.log(`[Auth] 🎁 7-day trial granted to ${req.email} (expires ${trialExpiry.toISOString()})`);
     }
 
     const config = await saveUserConfig(req.uid, profileData);
@@ -1279,11 +1279,13 @@ app.get('/api/subscription', authMiddleware, async (req, res) => {
         reason = 'no_subscription';
     }
 
-    // Calculate remaining hours for trial
+    // Calculate remaining time for trial
     let trialHoursLeft = null;
+    let trialDaysLeft = null;
     if (sub && sub.isTrial && active) {
         const msLeft = new Date(sub.expiresAt) - new Date();
         trialHoursLeft = Math.max(0, Math.round(msLeft / (1000 * 60 * 60) * 10) / 10);
+        trialDaysLeft  = Math.max(0, Math.ceil(msLeft / (1000 * 60 * 60 * 24)));
     }
 
     // no-store: browser must NEVER cache this — data is per-user
@@ -1291,7 +1293,7 @@ app.get('/api/subscription', authMiddleware, async (req, res) => {
     res.json({
         ok: true,
         data: sub
-            ? { ...sub, active, reason, trialHoursLeft }
+            ? { ...sub, active, reason, trialHoursLeft, trialDaysLeft }
             : { active: false, reason: 'no_subscription' }
     });
 });

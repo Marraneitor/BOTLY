@@ -1185,13 +1185,21 @@
 
         // ── Trial banner ──
         var banner = document.getElementById('trial-banner');
-        var hoursEl = document.getElementById('trial-hours-left');
+        var timeEl = document.getElementById('trial-time-left');
+        var bannerText = document.getElementById('trial-banner-text');
         if (banner) {
             if (sub && sub.isTrial && sub.active && sub.trialHoursLeft != null) {
                 banner.style.display = 'flex';
-                if (hoursEl) hoursEl.textContent = sub.trialHoursLeft < 1
-                    ? 'menos de 1'
-                    : Math.ceil(sub.trialHoursLeft);
+                if (timeEl && bannerText) {
+                    if (sub.trialDaysLeft != null && sub.trialDaysLeft >= 1) {
+                        var d = sub.trialDaysLeft;
+                        timeEl.textContent = d;
+                        bannerText.innerHTML = '🎁 Prueba gratuita: te quedan <strong id="trial-time-left">' + d + '</strong> día' + (d !== 1 ? 's' : '');
+                    } else {
+                        var h = sub.trialHoursLeft < 1 ? 'menos de 1' : Math.ceil(sub.trialHoursLeft);
+                        bannerText.innerHTML = '🎁 Prueba gratuita: te quedan <strong id="trial-time-left">' + h + '</strong> hora' + (h !== 1 ? 's' : '');
+                    }
+                }
             } else {
                 banner.style.display = 'none';
             }
@@ -1228,10 +1236,15 @@
                     subStatusBadge.className = 'sub-status__badge sub-status__badge--active';
                 }
             } else if (sub.isTrial) {
-                if (subStatusPlan) subStatusPlan.textContent = 'Prueba gratuita';
+                if (subStatusPlan) subStatusPlan.textContent = 'Prueba gratuita (7 días)';
                 if (subStatusExpires) {
-                    var h = sub.trialHoursLeft != null ? Math.ceil(sub.trialHoursLeft) : '?';
-                    subStatusExpires.textContent = 'Expira en ' + h + ' hora' + (h !== 1 ? 's' : '');
+                    if (sub.trialDaysLeft != null && sub.trialDaysLeft >= 1) {
+                        var d2 = sub.trialDaysLeft;
+                        subStatusExpires.textContent = 'Expira en ' + d2 + ' día' + (d2 !== 1 ? 's' : '');
+                    } else {
+                        var h2 = sub.trialHoursLeft != null ? Math.ceil(sub.trialHoursLeft) : '?';
+                        subStatusExpires.textContent = 'Expira en ' + h2 + ' hora' + (h2 !== 1 ? 's' : '');
+                    }
                 }
                 if (subStatusBadge) {
                     subStatusBadge.textContent = 'Trial';
